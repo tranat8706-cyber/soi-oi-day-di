@@ -1,11 +1,12 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Lock, Minus, Plus } from "lucide-react";
-import { isWolfRole, PRO_UNLOCKED, ROLE_ORDER, ROLES, SPECIAL_ROLES, type RoleId } from "@/constants/roles";
+import { Minus, Plus, Scale, Shuffle, SlidersHorizontal } from "lucide-react";
+import { isWolfRole, ROLE_ORDER, ROLES, SPECIAL_ROLES, type RoleId } from "@/constants/roles";
 import { MIN_PLAYERS, useGameStore } from "@/store/gameStore";
-import { maxWolves, resolveDeck, wolfTotal, type DeckConfig } from "@/utils/balancer";
+import { balanceVerdict, maxWolves, rebalance, resolveDeck, wolfTotal, type DeckConfig } from "@/utils/balancer";
 import { DeckSummary } from "../DeckSummary";
+import { BalanceMeter } from "./BalanceMeter";
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -29,20 +30,28 @@ const BLURB: Record<RoleId, string> = {
   KAMIKAZE: "1 lần cả ván, đêm lao vào 1 người: cả hai cùng chết.",
 };
 
-export function DeckEditor() {
+/** Bộ bài đang dùng (tự cân bằng hoặc tự chọn) cho n người. Dùng chung với màn chuẩn bị. */
+export function useCurrentDeck() {
   const playerCount = useGameStore((s) => s.players.length);
   const customDeck = useGameStore((s) => s.customDeck);
-  const setCustomDeck = useGameStore((s) => s.setCustomDeck);
-
+  const autoSeed = useGameStore((s) => s.autoSeed);
   // Chưa đủ người thì xem trước theo số tối thiểu.
   const n = Math.max(playerCount, MIN_PLAYERS);
-  const counts = resolveDeck(n, customDeck);
-  const custom = customDeck !== null;
+  const counts = resolveDeck(n, customDeck, autoSeed);
+  return { n, counts, custom: customDeck !== null, playerCount };
+}
+
+export function DeckEditor() {
+  const setCustomDeck = useGameStore((s) => s.setCustomDeck);
+  const rerollAutoDeck = useGameStore((s) => s.rerollAutoDeck);
+  const { n, counts, custom, playerCount } = useCurrentDeck();
+
   const current: DeckConfig = { WOLF: counts.WOLF };
   for (const id of SPECIAL_ROLES) current[id] = counts[id];
 
   const wolves = wolfTotal(counts);
   const wolfCap = maxWolves(n);
+  const verdict = balanceVerdict(counts);
 
   const change = (id: Exclude<RoleId, "VILLAGER">, delta: number) => {
     const lo = id === "WOLF" ? 1 : 0;
@@ -59,15 +68,12 @@ export function DeckEditor() {
 
   const specials = SPECIAL_ROLES.reduce((sum, id) => sum + counts[id], 0);
   const warnings: string[] = [];
-  if (wolves > Math.max(1, Math.floor(n / 3))) warnings.push("Sói đông, làng sẽ rất khó thắng.");
-  if (wolves < Math.floor(n / 4)) warnings.push("Ít Sói quá, ván có thể kết thúc sớm.");
   if (specials === 0) warnings.push("Không có vai đặc biệt: làng chỉ còn cách đoán.");
-  if (specials - (wolves - counts.WOLF) >= 4 && wolves <= 1) warnings.push("Nhiều vai phép mà chỉ 1 Sói: Sói gần như chắc thua.");
   if (counts.WHITE_WOLF && wolves < 3) warnings.push("Sói trắng nên đi cùng ít nhất 2 Sói khác.");
+  if (counts.WILD_CHILD && !counts.SEER && !counts.FOX) warnings.push("Có Đứa trẻ hoang mà không ai soi: Sói dễ được thêm người.");
 
   const row = (id: RoleId) => {
     const fixed = id === "VILLAGER";
-    const locked = ROLES[id].tier === "PRO" && !PRO_UNLOCKED;
     const wolfish = isWolfRole(id);
     return (
       <li key={id} className="flex min-h-20 items-center gap-3 border-b border-line py-2">
@@ -79,8 +85,6 @@ export function DeckEditor() {
         </span>
         {fixed ? (
           <span className="w-16 text-center font-display text-3xl tabular-nums text-bone/70">{counts.VILLAGER}</span>
-        ) : locked ? (
-          <Lock className="mx-5 size-5 text-ash" strokeWidth={1.5} />
         ) : (
           <span className="flex shrink-0 items-center">
             <button
@@ -108,8 +112,10 @@ export function DeckEditor() {
     );
   };
 
-  const free = ROLE_ORDER.filter((id) => ROLES[id].tier === "FREE");
-  const pro = ROLE_ORDER.filter((id) => ROLES[id].tier === "PRO");
+  const wolfRoles = ROLE_ORDER.filter((id) => isWolfRole(id));
+  const villageRoles = ROLE_ORDER.filter((id) => !isWolfRole(id));
+  const favoredName = verdict.favored === "VILLAGE" ? "Làng" : "Sói";
+  const favoredPct = Math.round(Math.max(verdict.village, verdict.wolves) * 100);
 
   return (
     <div>
@@ -134,6 +140,42 @@ export function DeckEditor() {
         ))}
       </div>
 
+      <div className="mt-4">
+        <BalanceMeter counts={counts} />
+      </div>
+
+      {/* Lệch nặng: báo đỏ thật rõ, kèm nút cân bằng giúp */}
+      <AnimatePresence>
+        {custom && verdict.level === "lopsided" && (
+          <motion.div
+            key="lopsided"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3, ease }}
+            className="overflow-hidden"
+          >
+            <div className="mt-3 rounded-2xl bg-blood px-4 py-4 text-bone">
+              <p className="font-display text-2xl uppercase leading-tight">
+                Phe {favoredName} quá mạnh · ~{favoredPct}%
+              </p>
+              <p className="mt-1 text-sm leading-snug text-bone/85">
+                Ván dễ thành một chiều, phe kia chơi sẽ chán. Để app chỉnh lại vài lá, giữ các vai bạn đã chọn nhiều nhất có thể.
+              </p>
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.97 }}
+                onClick={() => setCustomDeck(rebalance(n, current))}
+                className="mt-3 flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-bone text-ink"
+              >
+                <Scale className="size-5" strokeWidth={2} />
+                <span className="font-display text-xl uppercase leading-none">Cân bằng giúp tôi</span>
+              </motion.button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence initial={false} mode="wait">
         {custom ? (
           <motion.div
@@ -144,19 +186,27 @@ export function DeckEditor() {
             transition={{ duration: 0.3, ease }}
             className="overflow-hidden"
           >
-            <p className="mt-5 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.25em] text-ash">
-              <span>Vai cơ bản · miễn phí</span>
+            <p className="mt-6 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.25em] text-blood">
+              <span>Phe Sói</span>
               <span>
-                Sói {wolves}/{wolfCap}
+                {wolves}/{wolfCap} lá
               </span>
             </p>
-            <ul className="mt-1">{free.map(row)}</ul>
+            <ul className="mt-1">{wolfRoles.map(row)}</ul>
 
-            <p className="mt-8 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em] text-ash">
-              <span className="rounded bg-blood px-1.5 py-0.5 font-semibold tracking-[0.15em] text-bone">PRO</span>
-              Vai mở rộng {PRO_UNLOCKED && "· đang mở thử"}
-            </p>
-            <ul className="mt-1">{pro.map(row)}</ul>
+            <p className="mt-8 font-mono text-[10px] uppercase tracking-[0.25em] text-ash">Phe Làng</p>
+            <ul className="mt-1">{villageRoles.map(row)}</ul>
+
+            {verdict.level !== "lopsided" && verdict.level !== "even" && (
+              <button
+                type="button"
+                onClick={() => setCustomDeck(rebalance(n, current))}
+                className="mt-4 flex min-h-14 w-full items-center justify-center gap-2 rounded-xl border border-line font-mono text-[11px] uppercase tracking-[0.2em] text-bone active:bg-ink-2"
+              >
+                <Scale className="size-4" strokeWidth={1.75} />
+                Cân bằng giúp tôi
+              </button>
+            )}
           </motion.div>
         ) : (
           <motion.div
@@ -169,9 +219,28 @@ export function DeckEditor() {
           >
             <DeckSummary counts={counts} label="" />
             <p className="mt-3 text-sm leading-snug text-ash">
-              Khoảng 1 Sói cho mỗi 3 người, luôn có Tiên tri và Bảo vệ. Từ 7 người thêm Phù thủy, từ 9 người thêm Thợ săn. Muốn
-              dùng vai PRO, chọn “Tự chọn vai”.
+              App chọn vai từ toàn bộ {ROLE_ORDER.length} vai sao cho hai phe ngang sức. Bàn càng đông càng nhiều vai lạ; bàn ít
+              người chỉ dùng vai dễ hiểu.
             </p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.97 }}
+                onClick={rerollAutoDeck}
+                className="flex h-14 items-center justify-center gap-2 rounded-xl border border-line text-bone active:bg-ink-2"
+              >
+                <Shuffle className="size-4" strokeWidth={1.75} />
+                <span className="font-mono text-[11px] uppercase tracking-[0.18em]">Đổi bộ khác</span>
+              </motion.button>
+              <button
+                type="button"
+                onClick={() => setCustomDeck(current)}
+                className="flex h-14 items-center justify-center gap-2 rounded-xl border border-line text-bone active:bg-ink-2"
+              >
+                <SlidersHorizontal className="size-4" strokeWidth={1.75} />
+                <span className="font-mono text-[11px] uppercase tracking-[0.18em]">Sửa bộ này</span>
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

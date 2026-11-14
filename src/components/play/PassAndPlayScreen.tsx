@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Moon } from "lucide-react";
+import { ArrowLeft, Check, Moon } from "lucide-react";
 import { useGameStore } from "@/store/gameStore";
 import { countRoles } from "@/utils/balancer";
 import { DeckSummary } from "../DeckSummary";
@@ -26,8 +26,9 @@ export function PassAndPlayScreen() {
   const allSeen = players.length > 0 && remaining === 0;
   const active = players.find((p) => p.id === activeId) ?? null;
 
+  // Chưa ai xem bài thì quay lại luôn; có người xem rồi thì hỏi lại (bài sẽ chia lại từ đầu).
   const onAbortTap = () => {
-    if (!confirmAbort) {
+    if (!confirmAbort && seenCount > 0) {
       setConfirmAbort(true);
       setTimeout(() => setConfirmAbort(false), 2500);
       return;
@@ -38,16 +39,17 @@ export function PassAndPlayScreen() {
   return (
     <div className="mx-auto flex w-full max-w-xl flex-1 flex-col pt-safe">
       <header className="flex items-center justify-between px-safe pt-2">
-        <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">03 — Chuyền tay</p>
         <button
           type="button"
           onClick={onAbortTap}
-          className={`-mr-3 min-h-16 px-3 font-mono text-[11px] uppercase tracking-[0.2em] transition-colors ${
-            confirmAbort ? "text-blood" : "text-ash active:text-bone"
+          className={`-ml-3 flex min-h-16 items-center gap-1.5 px-3 font-mono text-[11px] uppercase tracking-[0.2em] transition-colors ${
+            confirmAbort ? "text-blood" : "text-bone active:text-ash"
           }`}
         >
-          {confirmAbort ? "Chạm lần nữa để hủy" : "Hủy ván"}
+          <ArrowLeft className="size-4" strokeWidth={1.75} />
+          {confirmAbort ? "Chạm lần nữa · chia lại từ đầu" : "Chọn lại vai"}
         </button>
+        <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">03 — Chuyền tay</p>
       </header>
 
       <main className="flex-1 px-safe pb-44">

@@ -107,6 +107,10 @@ interface GameStore {
   /** Bộ bài tự chọn; null = tự cân bằng theo số người. */
   customDeck: DeckConfig | null;
   setCustomDeck: (deck: DeckConfig | null) => void;
+  /** Seed của bộ tự cân bằng: giữ nguyên thì bộ bài xem trước khớp với lúc chia. */
+  autoSeed: number;
+  /** Đổi sang một bộ tự cân bằng khác. */
+  rerollAutoDeck: () => void;
 
   setSessionTitle: (title: string) => void;
   /** Trả về false nếu tên rỗng hoặc trùng. */
@@ -399,6 +403,8 @@ export const useGameStore = create<GameStore>()(
 
       setOnboarded: (onboarded) => set({ onboarded }),
       setCustomDeck: (customDeck) => set({ customDeck }),
+      autoSeed: 1,
+      rerollAutoDeck: () => set({ autoSeed: Math.floor(Math.random() * 1_000_000_000) }),
       setSessionTitle: (sessionTitle) => set({ sessionTitle }),
 
       addPlayer: (raw) => {
@@ -442,7 +448,7 @@ export const useGameStore = create<GameStore>()(
         set((s) => ({
           ...freshRound,
           gameState: "PASS_AND_PLAY",
-          players: balanceRoles(resetPlayers(s.players), s.customDeck),
+          players: balanceRoles(resetPlayers(s.players), s.customDeck, s.autoSeed),
         })),
 
       markRevealed: (id) =>
@@ -687,7 +693,7 @@ export const useGameStore = create<GameStore>()(
         set((s) => ({
           ...freshRound,
           gameState: "PASS_AND_PLAY",
-          players: balanceRoles(resetPlayers(s.players), s.customDeck),
+          players: balanceRoles(resetPlayers(s.players), s.customDeck, s.autoSeed),
         })),
     }),
     {
@@ -706,6 +712,7 @@ export const useGameStore = create<GameStore>()(
           isSoundEnabled: s.isSoundEnabled,
           onboarded: s.onboarded,
           customDeck: s.customDeck,
+          autoSeed: s.autoSeed,
         };
         // Toàn bộ trạng thái ván (để tải lại trang không mất ván).
         for (const k of Object.keys(freshRound) as (keyof typeof freshRound)[]) {

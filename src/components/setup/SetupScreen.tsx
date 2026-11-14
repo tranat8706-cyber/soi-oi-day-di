@@ -8,7 +8,10 @@ import { unlockAudio } from "@/utils/audio";
 import { track } from "@/utils/analytics";
 import { PlayerRow } from "./PlayerRow";
 import { HouseRulesSheet } from "./HouseRulesSheet";
-import { DeckEditor } from "./DeckEditor";
+import { DeckEditor, useCurrentDeck } from "./DeckEditor";
+import { BalanceMeter } from "./BalanceMeter";
+import { balanceVerdict, rebalance, type DeckConfig } from "@/utils/balancer";
+import { SPECIAL_ROLES } from "@/constants/roles";
 import { Onboarding } from "./Onboarding";
 
 const QUICK_FILL = [6, 8, 10, 12];
@@ -32,6 +35,10 @@ export function SetupScreen() {
   const [error, setError] = useState<string | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [lopsidedOpen, setLopsidedOpen] = useState(false);
+  const setCustomDeck = useGameStore((s) => s.setCustomDeck);
+  const deck = useCurrentDeck();
+  const verdict = balanceVerdict(deck.counts);
   const addRef = useRef<HTMLInputElement>(null);
 
   const missing = Math.max(0, MIN_PLAYERS - players.length);
@@ -64,6 +71,16 @@ export function SetupScreen() {
 
   const onStart = () => {
     void unlockAudio(); // phải gọi trong chính cử chỉ chạm
+    // Tự chọn mà lệch nặng: hỏi lại trước khi chia.
+    if (deck.custom && verdict.level === "lopsided") {
+      setLopsidedOpen(true);
+      return;
+    }
+    deal();
+  };
+
+  const deal = () => {
+    setLopsidedOpen(false);
     track("game_started", {
       players: players.length,
       sessionTitle: sessionTitle || null,
@@ -323,6 +340,67 @@ export function SetupScreen() {
       </div>
 
       <HouseRulesSheet open={rulesOpen} onClose={() => setRulesOpen(false)} />
+
+      {/* Hỏi lại khi bộ tự chọn lệch nặng */}
+      <AnimatePresence>
+        {lopsidedOpen && (
+          <>
+            <motion.div
+              key="backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setLopsidedOpen(false)}
+              className="fixed inset-0 z-40 bg-black/75 backdrop-blur-[2px]"
+            />
+            <motion.div
+              key="dialog"
+              role="alertdialog"
+              aria-modal="true"
+              aria-label="Bộ bài đang lệch"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", stiffness: 380, damping: 38 }}
+              className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-xl rounded-t-[28px] border-t border-blood bg-ink-2 px-safe pb-safe"
+            >
+              <div className="mx-auto mt-3 h-1 w-10 rounded-full bg-line" />
+              <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.25em] text-blood">Khoan đã</p>
+              <p className="mt-2 pt-[0.1em] font-display text-[clamp(2rem,9vw,2.75rem)] uppercase leading-[1.08] text-bone">
+                Phe {verdict.favored === "VILLAGE" ? "Làng" : "Sói"} quá mạnh
+              </p>
+              <p className="mt-2 text-sm leading-snug text-ash">
+                Với bộ bài này, phe {verdict.favored === "VILLAGE" ? "Làng" : "Sói"} gần như chắc thắng. Cân bằng lại cho cả bàn cùng vui?
+              </p>
+              <div className="mt-4">
+                <BalanceMeter counts={deck.counts} />
+              </div>
+              <div className="mt-5 space-y-2 pb-6">
+                <motion.button
+                  type="button"
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => {
+                    const current: DeckConfig = { WOLF: deck.counts.WOLF };
+                    for (const id of SPECIAL_ROLES) current[id] = deck.counts[id];
+                    setCustomDeck(rebalance(deck.n, current));
+                    setLopsidedOpen(false);
+                  }}
+                  className="flex h-16 w-full items-center justify-center rounded-2xl bg-bone text-ink"
+                >
+                  <span className="font-display text-2xl uppercase leading-none">Cân bằng giúp, tôi xem lại</span>
+                </motion.button>
+                <button
+                  type="button"
+                  onClick={deal}
+                  className="min-h-16 w-full font-mono text-[11px] uppercase tracking-[0.2em] text-ash active:text-bone"
+                >
+                  Kệ, vẫn chia bài
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>{!onboarded && <Onboarding key="onboarding" onDone={() => setOnboarded(true)} />}</AnimatePresence>
     </div>

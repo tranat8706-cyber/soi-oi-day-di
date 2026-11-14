@@ -21,7 +21,7 @@ export type RoleId =
 
 /** WOLVES: thức dậy cùng bầy, Tiên tri soi ra Sói. Sói trắng thuộc bầy nhưng thắng một mình. */
 export type Team = "WOLVES" | "VILLAGE";
-/** FREE: bộ vai cơ bản phổ biến nhất. PRO: vai mở rộng cho bản trả phí. */
+/** FREE: dùng miễn phí. PRO: dành cho bản trả phí sau này (hiện mọi vai đều FREE). */
 export type RoleTier = "FREE" | "PRO";
 
 /** Chưa có cổng thanh toán: tạm mở khoá toàn bộ vai PRO. */
@@ -124,7 +124,7 @@ export const ROLES: Record<RoleId, Role> = {
     id: "CUPID",
     name: "Thần tình yêu",
     team: "VILLAGE",
-    tier: "PRO",
+    tier: "FREE",
     description:
       "Đêm đầu tiên, bắn tên ghép đôi 2 người (có thể gồm chính bạn). Một người chết, người kia chết theo vì đau lòng. Nếu cặp đôi khác phe, họ chỉ thắng khi là 2 người cuối cùng còn sống.",
     gmInstruction:
@@ -137,7 +137,7 @@ export const ROLES: Record<RoleId, Role> = {
     id: "WILD_CHILD",
     name: "Đứa trẻ hoang",
     team: "VILLAGE",
-    tier: "PRO",
+    tier: "FREE",
     description:
       "Đêm đầu tiên, chọn một người làm thần tượng. Còn thần tượng sống, bạn là Dân làng. Thần tượng chết, bạn hóa Sói và dậy cùng bầy từ đêm sau.",
     gmInstruction: "Đứa trẻ hoang mở mắt. Chỉ vào người bạn chọn làm thần tượng. Đứa trẻ hoang nhắm mắt.",
@@ -149,7 +149,7 @@ export const ROLES: Record<RoleId, Role> = {
     id: "WOLF_SEER",
     name: "Sói tiên tri",
     team: "WOLVES",
-    tier: "PRO",
+    tier: "FREE",
     description:
       "Bạn là Sói, dậy cắn cùng bầy. Sau đó mỗi đêm được soi riêng một người để biết chính xác vai của họ. Săn Tiên tri trước khi bị lộ.",
     gmInstruction: "Sói tiên tri mở mắt. Chỉ vào người muốn soi. (Ra hiệu vai của người đó.) Sói tiên tri nhắm mắt.",
@@ -160,7 +160,7 @@ export const ROLES: Record<RoleId, Role> = {
     id: "WHITE_WOLF",
     name: "Sói trắng",
     team: "WOLVES",
-    tier: "PRO",
+    tier: "FREE",
     description:
       "Bạn dậy cắn cùng bầy như Sói thường, nhưng bạn chơi một mình. Mỗi đêm chẵn, bạn dậy riêng và được giết một con Sói. Bạn chỉ thắng khi là người cuối cùng còn sống.",
     gmInstruction: "Sói trắng mở mắt. Có muốn giết một con Sói không? Chỉ tay. Sói trắng nhắm mắt.",
@@ -172,7 +172,7 @@ export const ROLES: Record<RoleId, Role> = {
     id: "FOX",
     name: "Cáo",
     team: "VILLAGE",
-    tier: "PRO",
+    tier: "FREE",
     description:
       "Mỗi đêm, chỉ vào một người. Quản trò cho biết trong nhóm 3 người (người đó và 2 người ngồi sát hai bên) có Sói hay không. Nếu không có Sói nào, bạn mất phép vĩnh viễn.",
     gmInstruction: "Cáo mở mắt. Chỉ vào một người. (Gật nếu nhóm 3 người có Sói, lắc nếu không.) Cáo nhắm mắt.",
@@ -183,7 +183,7 @@ export const ROLES: Record<RoleId, Role> = {
     id: "CURSED_WOLF",
     name: "Sói nguyền",
     team: "WOLVES",
-    tier: "PRO",
+    tier: "FREE",
     description:
       "Bạn là Sói, dậy cắn cùng bầy. Một lần duy nhất trong ván, bầy có thể nguyền người bị cắn: người đó không chết mà hóa thành Sói.",
     gmInstruction: "Sói nguyền dậy cùng bầy Sói.",
@@ -194,7 +194,7 @@ export const ROLES: Record<RoleId, Role> = {
     id: "WOLF_CUB",
     name: "Sói con",
     team: "WOLVES",
-    tier: "PRO",
+    tier: "FREE",
     description:
       "Bạn là Sói, dậy cắn cùng bầy. Nếu bạn chết, bầy Sói nổi giận: đêm kế tiếp được cắn 2 người.",
     gmInstruction: "Sói con dậy cùng bầy Sói.",
@@ -205,7 +205,7 @@ export const ROLES: Record<RoleId, Role> = {
     id: "ELDER",
     name: "Già làng",
     team: "VILLAGE",
-    tier: "PRO",
+    tier: "FREE",
     description:
       "Bạn sống dai: chịu được lần đầu bị Sói cắn. Nhưng nếu dân làng treo cổ bạn, cả làng bị trời phạt: mọi vai có phép bên phe Làng đều mất phép.",
     gmInstruction: "Già làng không thức dậy ban đêm.",
@@ -216,7 +216,7 @@ export const ROLES: Record<RoleId, Role> = {
     id: "IDIOT",
     name: "Thằng ngố",
     team: "VILLAGE",
-    tier: "PRO",
+    tier: "FREE",
     description:
       "Nếu bị dân làng treo cổ, bạn lật bài và được tha vì ai cũng biết bạn ngố, nhưng từ đó mất quyền bỏ phiếu. Bị treo lần nữa thì chết thật.",
     gmInstruction: "Thằng ngố không thức dậy ban đêm.",
@@ -227,7 +227,7 @@ export const ROLES: Record<RoleId, Role> = {
     id: "LYCAN",
     name: "Bán sói",
     team: "VILLAGE",
-    tier: "PRO",
+    tier: "FREE",
     description:
       "Bạn là dân làng, thắng cùng phe Làng, nhưng trong người mang dòng máu Sói: Tiên tri soi bạn sẽ ra Sói. Hãy thuyết phục cả làng tin mình.",
     gmInstruction: "Bán sói không thức dậy ban đêm.",
@@ -238,7 +238,7 @@ export const ROLES: Record<RoleId, Role> = {
     id: "KAMIKAZE",
     name: "Kẻ cảm tử",
     team: "VILLAGE",
-    tier: "PRO",
+    tier: "FREE",
     description:
       "Một lần duy nhất trong ván, vào ban đêm, bạn lao vào một người bất kỳ: sáng ra cả hai cùng chết. Không gì cản được. Chọn sai thì làng mất hai người.",
     gmInstruction: "Kẻ cảm tử mở mắt. Đêm nay có muốn lao vào ai không? Chỉ tay, hoặc lắc đầu. Kẻ cảm tử nhắm mắt.",
