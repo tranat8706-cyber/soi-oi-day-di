@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #09090b;
+  --color-ink-2: #111113;
+  --color-line: #232326;
+  --color-ash: #77757a;
+  --color-bone: #ece7dd;
+  --color-blood: #c3161c;
+  --color-blood-dim: #5a0d10;
+  /* Màu phe Làng trên màn Recap. */
+  --color-moss: #4f9d74;
+
+  --font-display: var(--font-anton), "Arial Narrow", sans-serif;
+  --font-sans: var(--font-be-vietnam), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+}
+
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@utility px-safe {
+  padding-left: max(env(safe-area-inset-left, 0px), 1.25rem);
+  padding-right: max(env(safe-area-inset-right, 0px), 1.25rem);
+}
+
+html {
+  background: var(--color-ink);
+  color-scheme: dark;
+  -webkit-tap-highlight-color: transparent;
+  text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-bone);
+  font-family: var(--font-sans);
+  overscroll-behavior-y: none;
+}
+
+::selection {
+  background: var(--color-blood);
+  color: var(--color-bone);
+}
+
+/* Hạt phim + vignette: lớp phủ cố định, không bắt sự kiện chạm. */
+.film-grain::before,
+.film-grain::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+/* Vignette nằm dưới CTA (z-30) và sheet (z-40); hạt phim phủ lên tất cả. */
+.film-grain::before {
+  z-index: 20;
+  background: radial-gradient(120% 80% at 50% 0%, transparent 45%, rgba(0, 0, 0, 0.5) 100%);
+}
+.film-grain::after {
+  z-index: 100;
+  opacity: 0.07;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .film-grain::after {
+    animation: grain 0.9s steps(4) infinite;
+  }
+}
+@keyframes grain {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-2%, 1%); }
+  50% { transform: translate(1%, -2%); }
+  75% { transform: translate(-1%, 2%); }
+  100% { transform: translate(0, 0); }
+}
