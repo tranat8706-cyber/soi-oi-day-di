@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, EyeOff, Sun } from "lucide-react";
-import { getRole, isWolfRole, looksLikeWolf, NIGHT_SEQUENCE, wakesOnNight, type Role } from "@/constants/roles";
+import Image from "next/image";
+import { ChevronDown, Eye, EyeOff, Sun } from "lucide-react";
+import { cardImage, getRole, isWolfRole, looksLikeWolf, NIGHT_SEQUENCE, wakesOnNight, type Role } from "@/constants/roles";
 import {
   stepOf,
   useGameStore,
@@ -95,11 +96,22 @@ export function NightScreen() {
     setToast({ id: toastSeq.current, message });
   };
 
+  /** Chọn xong thì cuộn tới kết quả + nút Xong của bước đang mở. */
+  const scrollToDone = () => {
+    if (!openId) return;
+    setTimeout(() => {
+      stepRefs.current[openId]?.querySelector("[data-step-done]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
+  };
+
   const choose = (key: NightActionKey, target: Player | null) => {
     if ((nightActions[key] ?? null) === (target?.id ?? null)) return;
     setNightAction(key, target?.id ?? null);
     setConfirmWake(false);
     notify(target ? `${VERB[key]} ${target.name}.` : `Bỏ: ${VERB[key].toLowerCase()}.`);
+    // Bước còn lựa chọn phụ (Phù thủy 2 bình, Sói cắn người thứ hai) thì không cuộn đi.
+    const pendingSecondBite = key === "WOLF" && s.cubRevenge && !nightActions.WOLF_2;
+    if (target && !key.startsWith("WITCH") && key !== "WOLF_CURSE" && !pendingSecondBite) scrollToDone();
   };
 
   /** Thần tình yêu: chọn đủ 2 người. */
@@ -107,7 +119,10 @@ export function NightScreen() {
     const cur = (nightActions.CUPID ?? "").split("|").filter(Boolean);
     const next = cur.includes(p.id) ? cur.filter((id) => id !== p.id) : cur.length < 2 ? [...cur, p.id] : [cur[0], p.id];
     setNightAction("CUPID", next.length ? next.join("|") : null);
-    if (next.length === 2) notify(`${VERB.CUPID} ${next.map((id) => nameOf(id)).join(" ♥ ")}.`);
+    if (next.length === 2) {
+      notify(`${VERB.CUPID} ${next.map((id) => nameOf(id)).join(" ♥ ")}.`);
+      scrollToDone();
+    }
   };
 
   const undo = () => {
@@ -118,9 +133,8 @@ export function NightScreen() {
 
   const wolvesAlive = players.some((p) => p.isAlive && isWolfRole(p.roleId));
   const missingBite = wolvesAlive && !nightActions.WOLF;
-
   const onWake = () => {
-    if (missingBite && !confirmWake) {
+    if ((missingBite || pendingSteps.length > 0) && !confirmWake) {
       setConfirmWake(true);
       setTimeout(() => setConfirmWake(false), 3000);
       return;
@@ -146,6 +160,13 @@ export function NightScreen() {
     if (rid === "KAMIKAZE" && s.kamikazeUsed) return "used";
     return null;
   };
+
+  // Bước còn chọn được mà chưa chọn (bỏ qua bước của người chết / mất phép, và bước không bắt buộc).
+  const OPTIONAL: NightRoleId[] = ["WITCH", "KAMIKAZE", "WHITE_WOLF"];
+  const pendingSteps = steps.filter((r) => {
+    const rid = r.id as NightRoleId;
+    return !OPTIONAL.includes(rid) && !blockedReason(rid, holdersOf(r)) && !stepDone(rid, nightActions);
+  });
 
   const summaryOf = (rid: NightRoleId) => {
     const a = nightActions;
@@ -274,7 +295,16 @@ export function NightScreen() {
             <div className="mt-2">
               <PlayerList {...listProps("WOLF_SEER", (p) => (isWolfRole(p.roleId) ? "Đồng bọn" : null))} />
             </div>
-            {t && <ResultCard danger={t.roleId === "SEER"} who={t.name} big={getRole(t.roleId)?.name ?? "?"} hint="Ra hiệu vai này cho Sói tiên tri." />}
+            {t && (
+              <ResultCard
+                danger={t.roleId === "SEER"}
+                who={t.name}
+                big={getRole(t.roleId)?.name ?? "?"}
+                hint="Giơ màn hình cho Sói tiên tri thấy lá bài (người khác đang nhắm mắt)."
+                showTo="Sói tiên tri"
+                image={cardImage(t.roleId)}
+              />
+            )}
           </>
         );
       }
@@ -324,6 +354,7 @@ export function NightScreen() {
                       ? "Gật đầu với Tiên tri."
                       : "Lắc đầu với Tiên tri."
                 }
+                showTo="Tiên tri"
               />
             )}
           </>
@@ -343,7 +374,8 @@ export function NightScreen() {
                 danger={wolf}
                 who={group.map((p) => p.name).join(" · ")}
                 big={wolf ? "Có Sói" : "Không có Sói"}
-                hint={wolf ? "Gật đầu với Cáo." : "Lắc đầu với Cáo. Cáo mất phép từ đêm sau."}
+                hint={`${wolf ? "Gật đầu với Cáo." : "Lắc đầu với Cáo. Cáo mất phép từ đêm sau."} Nhóm 3 người tính theo thứ tự chỗ ngồi đã nhập ở bước 1 (vòng tròn: người cuối ngồi cạnh người đầu). Bàn ngồi khác thứ tự thì tự nhìn 3 người ngồi sát mà trả lời.`}
+                showTo="Cáo"
               />
             )}
           </>
@@ -421,17 +453,29 @@ export function NightScreen() {
         </span>
       </header>
 
-      <main className="flex-1 px-safe pb-48">
-        <motion.h1
-          initial={{ opacity: 0, y: 16, filter: "blur(8px)" }}
-          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          transition={{ duration: 1.1, ease }}
-          className="mt-6 font-display text-[clamp(4rem,20vw,8rem)] uppercase leading-[1.02] text-bone"
-        >
-          Đêm buông
-          <br />
-          xuống<span className="text-blood">.</span>
-        </motion.h1>
+      <main className="flex-1 px-safe pb-32">
+        <div className="relative -mx-5 mt-2 overflow-hidden px-5 pb-2 pt-10">
+          <motion.div
+            aria-hidden
+            className="absolute inset-0"
+            initial={{ opacity: 0, scale: 1.08 }}
+            animate={{ opacity: 0.75, scale: 1 }}
+            transition={{ duration: 2.4, ease }}
+          >
+            <Image src="/art/night.jpg" alt="" fill priority sizes="(max-width: 640px) 100vw, 640px" className="object-cover object-top" />
+            <div className="absolute inset-0 bg-linear-to-b from-ink/10 via-ink/40 to-ink" />
+          </motion.div>
+          <motion.h1
+            initial={{ opacity: 0, y: 16, filter: "blur(8px)" }}
+            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+            transition={{ duration: 1.1, ease }}
+            className="relative pt-[0.1em] font-display text-[clamp(4rem,20vw,8rem)] uppercase leading-[1.18] text-bone"
+          >
+            Đêm buông
+            <br />
+            xuống<span className="text-blood">.</span>
+          </motion.h1>
+        </div>
 
         <div className="mt-6 flex items-center gap-3 rounded-2xl border border-blood/40 bg-blood/10 px-4 py-3">
           <EyeOff className="size-5 shrink-0 text-blood" strokeWidth={1.75} />
@@ -544,13 +588,20 @@ export function NightScreen() {
                           stepBody(role)
                         )}
 
-                        <button
+                        <motion.button
                           type="button"
+                          data-step-done
                           onClick={() => setOpenId(next?.id ?? null)}
-                          className="mt-5 flex h-16 w-full items-center justify-center rounded-xl border border-line font-mono text-xs uppercase tracking-[0.2em] text-bone active:bg-ink"
+                          whileTap={{ scale: 0.97 }}
+                          className={`mt-5 flex h-16 w-full items-center justify-between rounded-xl px-5 transition-colors ${
+                            done || blocked ? "bg-bone text-ink" : "border border-bone/40 text-bone active:bg-ink"
+                          }`}
                         >
-                          {next ? `Xong · gọi ${next.id === "WOLF" ? "bầy Sói" : next.name}` : "Xong · thu gọn"}
-                        </button>
+                          <span className="font-display text-2xl uppercase leading-none">
+                            {next ? `Xong · gọi ${next.id === "WOLF" ? "bầy Sói" : next.name}` : "Xong · thu gọn"}
+                          </span>
+                          <ChevronDown className="size-6 shrink-0" strokeWidth={2} />
+                        </motion.button>
                       </div>
                     </motion.div>
                   )}
@@ -559,55 +610,112 @@ export function NightScreen() {
             );
           })}
         </ol>
+
+        {/* Gọi làng dậy nằm cuối danh sách (không ghim đáy) để khỏi bấm nhầm khi đang chọn. */}
+        <div className="mt-10">
+          <motion.button
+            type="button"
+            onClick={onWake}
+            whileTap={{ scale: 0.97 }}
+            className={`flex h-20 w-full items-center justify-between rounded-2xl px-6 transition-colors ${
+              confirmWake ? "bg-blood text-bone" : pendingSteps.length || missingBite ? "border border-line text-bone" : "bg-bone text-ink"
+            }`}
+          >
+            <span className="text-left">
+              <span className="block font-display text-3xl uppercase leading-none">Gọi làng dậy</span>
+              {(confirmWake || pendingSteps.length > 0 || missingBite) && (
+                <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.18em] opacity-80">
+                  {confirmWake
+                    ? "Chạm lần nữa để gọi làng dậy"
+                    : missingBite
+                      ? "Sói chưa cắn ai"
+                      : `Còn ${pendingSteps.length} bước chưa chọn`}
+                </span>
+              )}
+            </span>
+            <Sun className="size-7" strokeWidth={2} />
+          </motion.button>
+        </div>
       </main>
 
       <UndoToast toast={toast} onUndo={undo} onExpire={hideToast} />
-
-      {/* CTA cố định đáy */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 bg-linear-to-t from-ink via-ink/95 to-transparent pt-10">
-        <div className="pointer-events-auto mx-auto max-w-xl px-safe pb-safe">
-          <div className="pb-4">
-            <motion.button
-              type="button"
-              onClick={onWake}
-              whileTap={{ scale: 0.97 }}
-              className={`flex h-20 w-full items-center justify-between rounded-2xl px-6 transition-colors ${
-                confirmWake ? "bg-blood text-bone" : "bg-bone text-ink"
-              }`}
-            >
-              <span className="text-left">
-                <span className="block font-display text-3xl uppercase leading-none">Gọi làng dậy</span>
-                {confirmWake && (
-                  <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.18em]">Sói chưa cắn ai · chạm lần nữa</span>
-                )}
-              </span>
-              <Sun className="size-7" strokeWidth={2} />
-            </motion.button>
-          </div>
-        </div>
-      </div>
     </motion.div>
   );
 }
 
-/** Thẻ kết quả soi (Tiên tri, Sói tiên tri, Cáo). */
-function ResultCard({ danger, who, big, hint }: { danger: boolean; who: string; big: string; hint: string }) {
+/**
+ * Thẻ kết quả soi (Tiên tri, Sói tiên tri, Cáo). `showTo` có thì thêm nút giơ màn hình
+ * cho người soi xem trực tiếp (toàn màn hình, không lộ phần còn lại của app).
+ */
+function ResultCard({
+  danger,
+  who,
+  big,
+  hint,
+  showTo,
+  image,
+}: {
+  danger: boolean;
+  who: string;
+  big: string;
+  hint: string;
+  showTo?: string;
+  image?: string | null;
+}) {
+  const [showing, setShowing] = useState(false);
   return (
-    <AnimatePresence mode="wait">
-      <motion.div
-        key={who + big}
-        initial={{ opacity: 0, scale: 0.94 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.25, ease }}
-        className={`mt-5 rounded-2xl px-5 py-6 text-center ${danger ? "bg-blood text-bone" : "border border-bone/40 text-bone"}`}
-        aria-live="assertive"
-      >
-        <p className="font-mono text-[10px] uppercase tracking-[0.25em] opacity-80">{who}</p>
-        <p className="mt-2 pt-[0.1em] font-display text-5xl uppercase leading-[1.05]">{big}</p>
-        <p className="mt-3 text-sm opacity-80">{hint}</p>
-      </motion.div>
-    </AnimatePresence>
+    <>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={who + big}
+          initial={{ opacity: 0, scale: 0.94 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.25, ease }}
+          className={`mt-5 rounded-2xl px-5 py-6 text-center ${danger ? "bg-blood text-bone" : "border border-bone/40 text-bone"}`}
+          aria-live="assertive"
+        >
+          <p className="font-mono text-[10px] uppercase tracking-[0.25em] opacity-80">{who}</p>
+          <p className="mt-2 pt-[0.15em] font-display text-5xl uppercase leading-[1.2]">{big}</p>
+          <p className="mt-3 text-sm opacity-80">{hint}</p>
+          {showTo && (
+            <button
+              type="button"
+              onClick={() => setShowing(true)}
+              className={`mt-4 flex min-h-14 w-full items-center justify-center gap-2 rounded-xl font-mono text-[11px] uppercase tracking-[0.18em] ${
+                danger ? "bg-ink/30 text-bone" : "bg-bone text-ink"
+              }`}
+            >
+              <Eye className="size-4" strokeWidth={2} />
+              Giơ màn hình cho {showTo} xem
+            </button>
+          )}
+        </motion.div>
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showing && (
+          <motion.button
+            type="button"
+            onClick={() => setShowing(false)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-ink px-6 text-center"
+            aria-label="Đóng"
+          >
+            <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">{who}</span>
+            {image ? (
+              <Image src={image} alt={big} width={720} height={980} className="h-auto max-h-[62dvh] w-auto rounded-2xl" />
+            ) : null}
+            <span className={`pt-[0.15em] font-display text-[clamp(3rem,16vw,6rem)] uppercase leading-[1.15] ${danger ? "text-blood" : "text-bone"}`}>
+              {big}
+            </span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ash">Chạm để đóng</span>
+          </motion.button>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 

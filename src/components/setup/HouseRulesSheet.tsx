@@ -3,14 +3,14 @@
 import { useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
-import { useGameStore, type TieRule } from "@/store/gameStore";
+import { elderPunishOf, useGameStore, type ElderPunish, type TieRule } from "@/store/gameStore";
 
 interface Props {
   open: boolean;
   onClose: () => void;
 }
 
-type BoolRule = "witchSeesVictim" | "bodyguardSelfProtect" | "revealDeadRoles" | "elderVillageKill";
+type BoolRule = "witchSeesVictim" | "bodyguardSelfProtect" | "revealDeadRoles";
 
 /** `def`: giá trị khi bản lưu cũ chưa có luật này. */
 const RULES: { key: BoolRule; title: string; hint: string; def: boolean }[] = [
@@ -29,15 +29,19 @@ const RULES: { key: BoolRule; title: string; hint: string; def: boolean }[] = [
   {
     key: "revealDeadRoles",
     title: "Lật bài người chết",
-    hint: "Ai chết (đêm, bị treo, bị bắn) thì Quản trò công khai vai của họ cho cả bàn.",
+    hint: "Mặc định tắt: người chết giữ bí mật vai, cả bàn tự đoán. Bật lên thì Quản trò công khai vai của người chết.",
     def: false,
   },
+];
+
+const ELDER_OPTIONS: { value: ElderPunish; label: string; hint: string }[] = [
+  { value: "NONE", label: "Không phạt", hint: "Già làng chết thế nào cũng vậy, các vai phe Làng vẫn giữ phép." },
   {
-    key: "elderVillageKill",
-    title: "Già làng nghiêm khắc",
-    hint: "Già làng chết vì phe Làng (bị treo, bị độc, bị Thợ săn bắn, bị cảm tử) thì cả làng mất phép. Tắt: chỉ khi bị treo.",
-    def: false,
+    value: "LYNCH",
+    label: "Khi bị treo",
+    hint: "Luật gốc: dân treo nhầm Già làng thì trời phạt, Tiên tri, Bảo vệ, Phù thủy… mất phép đến hết ván.",
   },
+  { value: "ANY", label: "Mọi cách", hint: "Già làng chết vì phe Làng (bị treo, bị độc, bị bắn, bị cảm tử) đều làm cả làng mất phép." },
 ];
 
 const TIE_OPTIONS: { value: TieRule; label: string; hint: string }[] = [
@@ -60,6 +64,41 @@ function Switch({ on }: { on: boolean }) {
         className={`absolute top-1 size-[22px] rounded-full bg-bone ${on ? "right-1" : "left-1"}`}
       />
     </span>
+  );
+}
+
+function Segmented<T extends string>({
+  title,
+  options,
+  value,
+  onChange,
+}: {
+  title: string;
+  options: { value: T; label: string; hint: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="border-b border-line py-4">
+      <span className="block text-lg font-medium text-bone">{title}</span>
+      <div role="radiogroup" aria-label={title} className="mt-3 grid grid-cols-3 gap-1 rounded-2xl border border-line p-1">
+        {options.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            role="radio"
+            aria-checked={value === o.value}
+            onClick={() => onChange(o.value)}
+            className={`h-14 rounded-xl font-mono text-[11px] uppercase tracking-[0.12em] transition-colors ${
+              value === o.value ? "bg-bone text-ink" : "text-ash active:text-bone"
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+      <span className="mt-2 block text-sm leading-snug text-ash">{options.find((o) => o.value === value)?.hint}</span>
+    </div>
   );
 }
 
@@ -153,31 +192,18 @@ export function HouseRulesList() {
                 const on = houseRules[r.key] ?? r.def;
                 return <Row key={r.key} title={r.title} hint={r.hint} on={on} onToggle={() => setHouseRule(r.key, !on)} />;
               })}
-              <div className="border-b border-line py-4">
-                <span className="block text-lg font-medium text-bone">Khi hòa phiếu</span>
-                <div role="radiogroup" aria-label="Khi hòa phiếu" className="mt-3 grid grid-cols-3 gap-1 rounded-2xl border border-line p-1">
-                  {TIE_OPTIONS.map((o) => {
-                    const on = (houseRules.tieRule ?? "ROULETTE") === o.value;
-                    return (
-                      <button
-                        key={o.value}
-                        type="button"
-                        role="radio"
-                        aria-checked={on}
-                        onClick={() => setHouseRule("tieRule", o.value)}
-                        className={`h-14 rounded-xl font-mono text-[11px] uppercase tracking-[0.15em] transition-colors ${
-                          on ? "bg-bone text-ink" : "text-ash active:text-bone"
-                        }`}
-                      >
-                        {o.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <span className="mt-2 block text-sm leading-snug text-ash">
-                  {TIE_OPTIONS.find((o) => o.value === (houseRules.tieRule ?? "ROULETTE"))?.hint}
-                </span>
-              </div>
+              <Segmented
+                title="Khi hòa phiếu"
+                options={TIE_OPTIONS}
+                value={houseRules.tieRule ?? "ROULETTE"}
+                onChange={(v) => setHouseRule("tieRule", v)}
+              />
+              <Segmented
+                title="Già làng chết dưới tay phe Làng"
+                options={ELDER_OPTIONS}
+                value={elderPunishOf(houseRules)}
+                onChange={(v) => setHouseRule("elderPunish", v)}
+              />
               <Row
                 title="Âm thanh"
                 hint="Tiếng chuông, tiếng tru khi chuyển ngày đêm."

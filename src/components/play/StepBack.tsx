@@ -51,7 +51,7 @@ export function StepBack() {
             >
               <div className="mx-auto mt-3 h-1 w-10 rounded-full bg-line" />
               <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.25em] text-ash">Lỡ tay? Lùi lại một bước</p>
-              <p className="mt-3 pt-[0.1em] font-display text-[clamp(2rem,9vw,2.75rem)] uppercase leading-[1.08] text-bone">
+              <p className="mt-3 pt-[0.1em] font-display text-[clamp(2rem,9vw,2.75rem)] uppercase leading-[1.18] text-bone">
                 Hủy “{last.label}”
               </p>
               <p className="mt-2 text-sm leading-snug text-ash">

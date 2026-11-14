@@ -91,7 +91,7 @@ export const ROLES: Record<RoleId, Role> = {
     team: "VILLAGE",
     tier: "FREE",
     description:
-      "Bạn có 2 bình, mỗi bình dùng 1 lần cả ván. Bình cứu: cứu người vừa bị Sói cắn. Bình độc: giết một người bất kỳ. Dùng đúng lúc, đừng phí.",
+      "Bạn có 2 bình, mỗi bình dùng 1 lần cả ván. Bình cứu: cứu người vừa bị Sói cắn. Bình độc: giết một người bất kỳ. Dùng hết cả hai bình thì từ đó bạn chỉ còn là Dân làng, nên đừng phí.",
     gmInstruction:
       "Phù thủy mở mắt. Đêm nay người này bị cắn (chỉ tay). Có muốn dùng bình cứu không? Có muốn dùng bình độc lên ai không? Phù thủy nhắm mắt.",
     isNightActive: true,
@@ -103,7 +103,7 @@ export const ROLES: Record<RoleId, Role> = {
     team: "VILLAGE",
     tier: "FREE",
     description:
-      "Khi bạn chết (bị cắn hoặc bị treo), bạn được bắn chết ngay một người bất kỳ. Riêng chết vì bình độc của Phù thủy thì không kịp bắn.",
+      "Khi bạn chết (bị cắn hoặc bị treo), bạn được bắn chết ngay một người bất kỳ. Chỉ một phát duy nhất, nên ngắm cho kỹ. Riêng chết vì bình độc của Phù thủy thì không kịp bắn.",
     gmInstruction: "Thợ săn không thức dậy ban đêm.",
     isNightActive: false,
     nightOrder: 0,
@@ -114,7 +114,7 @@ export const ROLES: Record<RoleId, Role> = {
     team: "VILLAGE",
     tier: "FREE",
     description:
-      "Bạn không có phép gì ngoài cái miệng và cái đầu. Ngủ yên qua đêm, ban ngày tìm ra Sói và treo cổ chúng.",
+      "Không phép, không khiên, không bình thuốc. Vũ khí duy nhất của bạn là cái miệng (và cái đầu, nếu có). Đêm ngủ cho ngoan, ngày cãi cho hăng, treo đúng Sói thì mới không vô dụng.",
     gmInstruction: "Dân làng không thức dậy vào ban đêm.",
     isNightActive: false,
     nightOrder: 0,
@@ -127,7 +127,7 @@ export const ROLES: Record<RoleId, Role> = {
     team: "VILLAGE",
     tier: "FREE",
     description:
-      "Đêm đầu tiên, bắn tên ghép đôi 2 người (có thể gồm chính bạn). Một người chết, người kia chết theo vì đau lòng. Nếu cặp đôi khác phe, họ chỉ thắng khi là 2 người cuối cùng còn sống.",
+      "Đêm đầu tiên, bắn tên ghép đôi 2 người (có thể gồm chính bạn). Một người chết, người kia chết theo vì đau lòng. Nếu cặp đôi khác phe, họ chỉ thắng khi là 2 người cuối cùng còn sống. Bắn xong mũi tên, bạn chỉ còn là Dân làng.",
     gmInstruction:
       "Thần tình yêu mở mắt. Chỉ vào 2 người sẽ yêu nhau. Thần tình yêu nhắm mắt. (Chạm vai 2 người đó: mở mắt nhìn nhau rồi nhắm lại.)",
     isNightActive: true,
@@ -175,7 +175,7 @@ export const ROLES: Record<RoleId, Role> = {
     team: "VILLAGE",
     tier: "FREE",
     description:
-      "Mỗi đêm, chỉ vào một người. Quản trò cho biết trong nhóm 3 người (người đó và 2 người ngồi sát hai bên) có Sói hay không. Nếu không có Sói nào, bạn mất phép vĩnh viễn.",
+      "Mỗi đêm, chỉ vào một người. Quản trò cho biết trong nhóm 3 người (người đó và 2 người còn sống ngồi sát hai bên) có Sói hay không. Đánh hơi trượt (nhóm không có Sói) thì bạn mất phép vĩnh viễn, từ đó chỉ còn là Dân làng.",
     gmInstruction: "Cáo mở mắt. Chỉ vào một người. (Gật nếu nhóm 3 người có Sói, lắc nếu không.) Cáo nhắm mắt.",
     isNightActive: true,
     nightOrder: 9,
@@ -186,7 +186,7 @@ export const ROLES: Record<RoleId, Role> = {
     team: "WOLVES",
     tier: "FREE",
     description:
-      "Bạn là Sói, dậy cắn cùng bầy. Một lần duy nhất trong ván, bầy có thể nguyền người bị cắn: người đó không chết mà hóa thành Sói.",
+      "Bạn là Sói, dậy cắn cùng bầy. Một lần duy nhất trong ván, bầy có thể nguyền người bị cắn: người đó không chết mà hóa thành Sói. Nguyền xong thì bạn như Sói thường.",
     gmInstruction: "Sói nguyền dậy cùng bầy Sói.",
     isNightActive: false,
     nightOrder: 0,
@@ -208,7 +208,7 @@ export const ROLES: Record<RoleId, Role> = {
     team: "VILLAGE",
     tier: "FREE",
     description:
-      "Bạn sống dai: chịu được lần đầu bị Sói cắn. Nhưng nếu dân làng treo cổ bạn, cả làng bị trời phạt: mọi vai có phép bên phe Làng đều mất phép.",
+      "Bạn sống dai: chịu được lần đầu bị Sói cắn, lần thứ hai thì chết. Nếu dân làng treo cổ bạn, cả làng bị trời phạt: Tiên tri, Bảo vệ, Phù thủy và mọi vai có phép bên phe Làng đều mất phép (tùy luật nhà).",
     gmInstruction: "Già làng không thức dậy ban đêm.",
     isNightActive: false,
     nightOrder: 0,
@@ -241,7 +241,7 @@ export const ROLES: Record<RoleId, Role> = {
     team: "VILLAGE",
     tier: "FREE",
     description:
-      "Một lần duy nhất trong ván, vào ban đêm, bạn lao vào một người bất kỳ: sáng ra cả hai cùng chết. Không gì cản được. Chọn sai thì làng mất hai người.",
+      "Một lần duy nhất trong ván, vào ban đêm, bạn lao vào một người bất kỳ: sáng ra cả hai cùng chết. Không gì cản được. Chưa dùng thì bạn sống như Dân làng; chọn sai thì làng mất hai người.",
     gmInstruction: "Kẻ cảm tử mở mắt. Đêm nay có muốn lao vào ai không? Chỉ tay, hoặc lắc đầu. Kẻ cảm tử nhắm mắt.",
     isNightActive: true,
     nightOrder: 10,

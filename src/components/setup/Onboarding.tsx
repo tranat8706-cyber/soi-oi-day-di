@@ -117,7 +117,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
                 <Icon className="size-9 text-blood" strokeWidth={1.5} />
               </span>
               <p className="mt-8 font-mono text-[11px] uppercase tracking-[0.25em] text-ash">{s.kicker}</p>
-              <h2 className="mt-3 pt-[0.08em] font-display text-[clamp(3.25rem,16vw,6rem)] uppercase leading-[1.02] text-bone">
+              <h2 className="mt-3 pt-[0.08em] font-display text-[clamp(3.25rem,16vw,6rem)] uppercase leading-[1.18] text-bone">
                 {s.title[0]}
                 <br />
                 {s.title[1].replace(/\.$/, "")}

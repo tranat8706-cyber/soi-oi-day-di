@@ -31,8 +31,10 @@ export interface HouseRules {
   bodyguardSelfProtect: boolean;
   /** Quản trò chỉ cho Phù thủy biết ai vừa bị cắn. Đọc bằng `!== false` (bản lưu cũ chưa có). */
   witchSeesVictim?: boolean;
-  /** Già làng chết vì phe Làng (độc, bị bắn, cảm tử) cũng làm làng mất phép. Mặc định tắt. */
+  /** Bản cũ của elderPunish (true = "ANY"). */
   elderVillageKill?: boolean;
+  /** Già làng chết vì phe Làng thì làng mất phép: không bao giờ / chỉ khi bị treo (mặc định) / mọi cách. */
+  elderPunish?: ElderPunish;
   /** Sáng ra / sau khi treo, công khai vai của người chết. Mặc định tắt. */
   revealDeadRoles?: boolean;
   /** Hòa phiếu thì: quay ngẫu nhiên, bầu lại giữa những người bằng phiếu, hoặc không treo ai. */
@@ -41,6 +43,9 @@ export interface HouseRules {
 
 export type TieRule = "ROULETTE" | "REVOTE" | "NONE";
 export type SetupStep = 1 | 2 | 3;
+export type ElderPunish = "NONE" | "LYNCH" | "ANY";
+
+export const elderPunishOf = (h: HouseRules): ElderPunish => h.elderPunish ?? (h.elderVillageKill ? "ANY" : "LYNCH");
 
 /** Một bước có thể lùi lại: nhãn để hiện cho quản trò và ảnh chụp trạng thái ván ngay trước bước đó. */
 export interface UndoEntry {
@@ -405,7 +410,7 @@ export const useGameStore = create<GameStore>()(
       houseRules: {
         bodyguardSelfProtect: true,
         witchSeesVictim: true,
-        elderVillageKill: false,
+        elderPunish: "LYNCH",
         revealDeadRoles: false,
         tieRule: "ROULETTE",
       },
@@ -554,7 +559,7 @@ export const useGameStore = create<GameStore>()(
           const hunterId = !lost ? res.hunterId : null;
           // Luật nhà: Già làng chết vì phe Làng (độc, cảm tử) thì làng mất phép.
           const elderByVillage =
-            s.houseRules.elderVillageKill === true &&
+            elderPunishOf(s.houseRules) === "ANY" &&
             res.died.some((d) => (d.cause === "POISON" || d.cause === "KAMIKAZE") && players.find((p) => p.id === d.id)?.roleId === "ELDER");
 
           return {
@@ -644,7 +649,8 @@ export const useGameStore = create<GameStore>()(
         }
 
         const res = applyDeaths(s.players, [[target.id, "LYNCH"]], { loverIds: s.loverIds, wildModelId: s.wildModelId });
-        const villagePowersLost = s.villagePowersLost || target.roleId === "ELDER";
+        const villagePowersLost =
+          s.villagePowersLost || (target.roleId === "ELDER" && elderPunishOf(s.houseRules) !== "NONE");
         const hunterId = !villagePowersLost ? res.hunterId : null;
         set({
           undoStack,
@@ -679,7 +685,7 @@ export const useGameStore = create<GameStore>()(
           undoStack: pushUndo(s, target ? `Thợ săn bắn ${target.name}` : "Thợ săn không bắn"),
           newWolfIds: res?.wildChildTurnedId ? [...s.newWolfIds, res.wildChildTurnedId] : s.newWolfIds,
           villagePowersLost:
-            s.villagePowersLost || (s.houseRules.elderVillageKill === true && target?.roleId === "ELDER"),
+            s.villagePowersLost || (elderPunishOf(s.houseRules) === "ANY" && target?.roleId === "ELDER"),
           players: res?.players ?? s.players,
           pendingHunterId: null,
           hunterShotId: target?.id ?? null,

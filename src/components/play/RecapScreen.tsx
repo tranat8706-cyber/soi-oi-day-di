@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { motion } from "framer-motion";
 import { RotateCcw } from "lucide-react";
 import { getRole } from "@/constants/roles";
@@ -14,11 +15,11 @@ const GRAIN =
   "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")";
 
 /** Chữ, màu và quầng sáng theo phe thắng. */
-const WIN_LOOK: Record<Winner, { top: string; text: string; glow: string; size: string }> = {
-  WOLF: { top: "Sói", text: "text-blood", glow: "bg-blood/40", size: "text-[18cqw]" },
-  VILLAGER: { top: "Làng", text: "text-moss", glow: "bg-moss/30", size: "text-[18cqw]" },
-  LOVERS: { top: "Cặp đôi", text: "text-rose", glow: "bg-rose/35", size: "text-[15cqw]" },
-  WHITE_WOLF: { top: "Sói trắng", text: "text-bone", glow: "bg-bone/20", size: "text-[14cqw]" },
+const WIN_LOOK: Record<Winner, { top: string; text: string; glow: string; size: string; art: string }> = {
+  WOLF: { top: "Sói", text: "text-blood", glow: "bg-blood/40", size: "text-[18cqw]", art: "/art/win-wolf.jpg" },
+  VILLAGER: { top: "Làng", text: "text-moss", glow: "bg-moss/30", size: "text-[18cqw]", art: "/art/win-village.jpg" },
+  LOVERS: { top: "Cặp đôi", text: "text-rose", glow: "bg-rose/35", size: "text-[15cqw]", art: "/art/win-lovers.jpg" },
+  WHITE_WOLF: { top: "Sói trắng", text: "text-bone", glow: "bg-bone/20", size: "text-[14cqw]", art: "/art/win-white-wolf.jpg" },
 };
 
 /** Lệch nhẹ cho mỗi tấm polaroid, cố định theo vị trí. */
@@ -66,11 +67,22 @@ export function RecapScreen() {
         className="@container relative mt-3 aspect-9/16 w-[min(100%-2rem,calc((100dvh-15rem)*9/16))] overflow-hidden rounded-[3cqw] bg-ink"
         aria-label="Bảng tổng kết ván"
       >
+        {/* Ảnh phe thắng ở nửa trên, chìm dần vào nền */}
+        <motion.div
+          aria-hidden
+          className="absolute inset-x-0 top-0 h-[52%]"
+          initial={{ opacity: 0, scale: 1.1 }}
+          animate={{ opacity: 0.85, scale: 1 }}
+          transition={{ duration: 2.4, ease }}
+        >
+          <Image src={look.art} alt="" fill priority sizes="(max-width: 640px) 100vw, 600px" className="object-cover object-top" />
+          <div className="absolute inset-0 bg-linear-to-b from-ink/20 via-ink/50 to-ink" />
+        </motion.div>
         {/* Quầng màu phe thắng */}
         <motion.div
           aria-hidden
-          className={`absolute -top-[25%] left-1/2 h-[70%] w-[140%] -translate-x-1/2 rounded-full blur-3xl ${look.glow}`}
-          animate={{ opacity: [0.55, 1, 0.7, 0.95, 0.55] }}
+          className={`absolute -top-[25%] left-1/2 h-[70%] w-[140%] -translate-x-1/2 rounded-full blur-3xl mix-blend-screen ${look.glow}`}
+          animate={{ opacity: [0.25, 0.5, 0.3, 0.45, 0.25] }}
           transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
         />
         {/* Nhiễu hạt + viền tối */}
@@ -90,7 +102,7 @@ export function RecapScreen() {
             initial={{ opacity: 0, filter: "blur(12px)", letterSpacing: "0.2em" }}
             animate={{ opacity: [0, 1, 0.6, 1, 0.85, 1], filter: "blur(0px)", letterSpacing: "0em" }}
             transition={{ duration: 2.2, ease, times: [0, 0.35, 0.45, 0.6, 0.7, 1] }}
-            className={`mt-[4cqw] pt-[0.1em] font-display uppercase leading-[1.02] ${accent} ${look.size}`}
+            className={`mt-[4cqw] pt-[0.1em] font-display uppercase leading-[1.18] ${accent} ${look.size}`}
           >
             {look.top}
             <br />

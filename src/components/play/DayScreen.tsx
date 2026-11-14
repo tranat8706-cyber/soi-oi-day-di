@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Crosshair, Dices, Gavel, Moon, Skull, Timer } from "lucide-react";
+import Image from "next/image";
 import { getRole } from "@/constants/roles";
-import { useGameStore, type Player } from "@/store/gameStore";
+import { elderPunishOf, useGameStore, type Player } from "@/store/gameStore";
 import { countRoles } from "@/utils/balancer";
 import { DeckSummary } from "../DeckSummary";
 import { PlayerList } from "./PlayerList";
@@ -81,7 +82,7 @@ export function DayScreen() {
   const voters = alivePlayers.filter((p) => p.id !== idiotRevealedId).length;
   const elderPunished =
     villagePowersLost &&
-    houseRules.elderVillageKill === true &&
+    elderPunishOf(houseRules) === "ANY" &&
     players.some((p) => p.roleId === "ELDER" && (lastVictimIds.includes(p.id) || p.id === hunterShotId));
   const heartbroken = players.filter((p) => dayDeaths.some((d) => d.id === p.id && d.cause === "HEARTBREAK"));
   const idiotSaved = lynched?.isAlive && lynched.id === idiotRevealedId;
@@ -182,14 +183,26 @@ export function DayScreen() {
             />
           ) : (
             <motion.div key="day" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
-              <motion.h1
-                initial={{ opacity: 0, y: 16, filter: "blur(8px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                transition={{ duration: 1, ease }}
-                className="mt-6 font-display text-[clamp(3rem,14vw,5.5rem)] uppercase leading-[1.02] text-ash"
-              >
-                Làng thức dậy<span className="text-blood">.</span>
-              </motion.h1>
+              <div className="relative -mx-5 mt-2 overflow-hidden px-5 pb-2 pt-24">
+                <motion.div
+                  aria-hidden
+                  className="absolute inset-0"
+                  initial={{ opacity: 0, scale: 1.08 }}
+                  animate={{ opacity: 0.7, scale: 1 }}
+                  transition={{ duration: 2.4, ease }}
+                >
+                  <Image src="/art/day.jpg" alt="" fill priority sizes="(max-width: 640px) 100vw, 640px" className="object-cover object-[50%_30%]" />
+                  <div className="absolute inset-0 bg-linear-to-b from-ink/0 via-ink/40 to-ink" />
+                </motion.div>
+                <motion.h1
+                  initial={{ opacity: 0, y: 16, filter: "blur(8px)" }}
+                  animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                  transition={{ duration: 1, ease }}
+                  className="relative pt-[0.1em] font-display text-[clamp(3rem,14vw,5.5rem)] uppercase leading-[1.18] text-bone"
+                >
+                  Làng thức dậy<span className="text-blood">.</span>
+                </motion.h1>
+              </div>
 
               <motion.section
                 initial={{ opacity: 0, y: 16 }}
@@ -238,7 +251,7 @@ export function DayScreen() {
                   className="mt-10 rounded-2xl border border-bone/40 bg-ink-2 px-5 py-6"
                 >
                   <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-ash">Phán quyết hôm nay · bất ngờ</p>
-                  <p className="mt-3 pt-[0.1em] font-display text-[clamp(2.5rem,11vw,3.5rem)] uppercase leading-[1.05] text-bone">
+                  <p className="mt-3 pt-[0.1em] font-display text-[clamp(2.5rem,11vw,3.5rem)] uppercase leading-[1.18] text-bone">
                     {lynched.name} là Thằng ngố!
                   </p>
                   <p className="mt-3 text-base leading-relaxed text-bone/75">
@@ -258,7 +271,7 @@ export function DayScreen() {
                   <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em] text-blood">
                     <Skull className="size-4" strokeWidth={1.75} /> Phán quyết hôm nay
                   </p>
-                  <p className="mt-3 pt-[0.1em] font-display text-[clamp(2.5rem,11vw,3.5rem)] uppercase leading-[1.05] text-bone">
+                  <p className="mt-3 pt-[0.1em] font-display text-[clamp(2.5rem,11vw,3.5rem)] uppercase leading-[1.18] text-bone">
                     {lynched.name} đã bị treo cổ
                   </p>
                   {revealRoles && (
@@ -587,7 +600,7 @@ function HunterPanel({
       <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-blood">
         {lynched ? "Vừa bị treo cổ" : "Đã chết đêm qua"} · Thợ săn
       </p>
-      <h1 className="mt-4 pt-[0.1em] font-display text-[clamp(3rem,15vw,5.5rem)] uppercase leading-[1.02] text-bone">
+      <h1 className="mt-4 pt-[0.1em] font-display text-[clamp(3rem,15vw,5.5rem)] uppercase leading-[1.18] text-bone">
         Phát súng
         <br />
         cuối<span className="text-blood">.</span>
@@ -688,9 +701,13 @@ function TrialPanel({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -12 }}
       transition={{ duration: 0.5, ease }}
-      className="mt-6"
+      className="mt-2"
     >
-      <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-blood">
+      <div className="relative -mx-5 h-44 overflow-hidden">
+        <Image src="/art/gallows.jpg" alt="" fill priority sizes="(max-width: 640px) 100vw, 640px" className="object-cover object-[50%_40%] opacity-80" />
+        <div className="absolute inset-0 bg-linear-to-b from-ink/0 via-ink/30 to-ink" />
+      </div>
+      <p className="relative -mt-6 font-mono text-[11px] uppercase tracking-[0.25em] text-blood">
         {viaRoulette ? "Vòng quay tử thần đã gọi tên" : "Bị đưa lên giàn"}
       </p>
 
@@ -703,7 +720,7 @@ function TrialPanel({
             accused.name.slice(0, 1)
           )}
         </span>
-        <h1 className="min-w-0 break-words pt-[0.1em] font-display text-[clamp(3rem,15vw,5.5rem)] uppercase leading-[1.02] text-bone">
+        <h1 className="min-w-0 break-words pt-[0.1em] font-display text-[clamp(3rem,15vw,5.5rem)] uppercase leading-[1.18] text-bone">
           {accused.name}
         </h1>
       </div>

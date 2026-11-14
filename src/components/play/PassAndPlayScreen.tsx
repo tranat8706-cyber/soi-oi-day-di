@@ -61,7 +61,7 @@ export function PassAndPlayScreen() {
           transition={{ duration: 0.8, ease }}
           className="mt-6 flex items-end justify-between gap-4"
         >
-          <h1 className="font-display text-[clamp(4rem,20vw,8rem)] uppercase leading-[1.02] text-bone">
+          <h1 className="font-display text-[clamp(4rem,20vw,8rem)] uppercase leading-[1.18] text-bone">
             Xem bài<span className="text-blood">.</span>
           </h1>
           <p className="pb-3 font-display text-4xl leading-none tabular-nums text-bone">

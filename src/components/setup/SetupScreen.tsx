@@ -194,7 +194,7 @@ export function SetupScreen() {
           {step === 1 && (
             <motion.div key="step1" initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.25 }}>
               {/* Tiêu đề */}
-              <h1 className="mt-6 font-display uppercase leading-[1.02] tracking-tight text-bone text-[clamp(5rem,26vw,10.5rem)]">
+              <h1 className="mt-6 font-display uppercase leading-[1.18] tracking-tight text-bone text-[clamp(5rem,26vw,10.5rem)]">
                 <motion.span
                   className="block"
                   initial={{ opacity: 0, y: 24, filter: "blur(8px)" }}
@@ -230,7 +230,8 @@ export function SetupScreen() {
                   <span className="font-display text-5xl leading-none tabular-nums text-bone">{String(players.length).padStart(2, "0")}</span>
                 </div>
                 <p className="mt-2 text-sm leading-snug text-ash">
-                  Gõ tên từng người theo <span className="text-bone">thứ tự chỗ ngồi</span> rồi bấm Enter. Cần ít nhất {MIN_PLAYERS} người.
+                  Gõ tên từng người <span className="text-bone">lần lượt theo vòng ngồi</span> (người cuối ngồi cạnh người đầu) rồi bấm
+                  Enter. Cần ít nhất {MIN_PLAYERS} người. Thứ tự này dùng cho vai Cáo.
                 </p>
 
                 <ul className="mt-3 border-t border-line">
@@ -342,7 +343,7 @@ export function SetupScreen() {
 
           {step === 2 && (
             <motion.section key="step2" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.25 }}>
-              <h2 className="mt-8 font-display text-[clamp(3rem,15vw,5rem)] uppercase leading-[1.02] text-bone">
+              <h2 className="mt-8 font-display text-[clamp(3rem,15vw,5rem)] uppercase leading-[1.18] text-bone">
                 Bộ bài<span className="text-blood">.</span>
               </h2>
               <p className="mt-2 text-sm leading-snug text-ash">
@@ -354,7 +355,7 @@ export function SetupScreen() {
 
           {step === 3 && (
             <motion.div key="step3" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.25 }}>
-              <h2 className="mt-8 font-display text-[clamp(3rem,15vw,5rem)] uppercase leading-[1.02] text-bone">
+              <h2 className="mt-8 font-display text-[clamp(3rem,15vw,5rem)] uppercase leading-[1.18] text-bone">
                 Luật chơi<span className="text-blood">.</span>
               </h2>
               <p className="mt-2 text-sm leading-snug text-ash">Thống nhất với cả bàn trước khi chơi để khỏi cãi nhau giữa ván.</p>
@@ -462,7 +463,7 @@ export function SetupScreen() {
             >
               <div className="mx-auto mt-3 h-1 w-10 rounded-full bg-line" />
               <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.25em] text-blood">Khoan đã</p>
-              <p className="mt-2 pt-[0.1em] font-display text-[clamp(2rem,9vw,2.75rem)] uppercase leading-[1.08] text-bone">
+              <p className="mt-2 pt-[0.1em] font-display text-[clamp(2rem,9vw,2.75rem)] uppercase leading-[1.18] text-bone">
                 Phe {verdict.favored === "VILLAGE" ? "Làng" : "Sói"} quá mạnh
               </p>
               <p className="mt-2 text-sm leading-snug text-ash">
