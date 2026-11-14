@@ -5,7 +5,8 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { EyeOff, MoonStar } from "lucide-react";
 import type { Player } from "@/store/gameStore";
 import { useGameStore } from "@/store/gameStore";
-import { getRole } from "@/constants/roles";
+import Image from "next/image";
+import { cardImage, getRole } from "@/constants/roles";
 import { playThud } from "@/utils/audio";
 
 const ease = [0.22, 1, 0.36, 1] as const;
@@ -21,6 +22,7 @@ interface Props {
 
 export function RoleReveal({ player, onCancel, onDone }: Props) {
   const role = getRole(player.roleId);
+  const card = cardImage(player.roleId);
   const isWolf = role?.team === "WOLVES";
   const isSoundEnabled = useGameStore((s) => s.isSoundEnabled);
   const reduceMotion = useReducedMotion();
@@ -109,6 +111,8 @@ export function RoleReveal({ player, onCancel, onDone }: Props) {
               className="flex flex-1 flex-col"
             >
               <div className="pt-10">
+                {/* Tải sẵn ảnh lá bài để lật là hiện ngay. */}
+                {card && <Image src={card} alt="" width={720} height={980} priority className="hidden" />}
                 <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">Bài của</p>
                 <h2 className="mt-4 break-words font-display text-[clamp(3.5rem,18vw,7rem)] uppercase leading-[1.02] text-bone">
                   {player.name}
@@ -150,14 +154,38 @@ export function RoleReveal({ player, onCancel, onDone }: Props) {
               <div className="flex-1 pt-10">
                 <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">
                   {player.name} · {role?.team === "WOLVES" ? "Phe Sói" : "Phe Dân"}
+                  {card && <span className={isWolf ? "text-blood" : "text-bone"}> · {role?.name}</span>}
                 </p>
-                <h2
-                  className={`mt-5 font-display uppercase leading-[1.02] text-[clamp(5rem,28vw,11rem)] ${
-                    isWolf ? "text-blood" : "text-bone"
-                  }`}
-                >
-                  {role?.name ?? "???"}
-                </h2>
+                {card ? (
+                  <>
+                    <h2 className="sr-only">{role?.name}</h2>
+                    <motion.div
+                      initial={isWolf ? false : { rotateY: 90 }}
+                      animate={{ rotateY: 0 }}
+                      transition={{ duration: 0.5, ease }}
+                      className="mx-auto mt-4 w-fit"
+                    >
+                      <Image
+                        src={card}
+                        alt={role?.name ?? ""}
+                        width={720}
+                        height={980}
+                        priority
+                        className={`h-auto max-h-[52dvh] w-auto rounded-2xl object-contain shadow-[0_20px_60px_rgba(0,0,0,0.8)] ${
+                          isWolf ? "ring-2 ring-blood/70" : "ring-1 ring-bone/20"
+                        }`}
+                      />
+                    </motion.div>
+                  </>
+                ) : (
+                  <h2
+                    className={`mt-5 font-display uppercase leading-[1.02] text-[clamp(5rem,28vw,11rem)] ${
+                      isWolf ? "text-blood" : "text-bone"
+                    }`}
+                  >
+                    {role?.name ?? "???"}
+                  </h2>
+                )}
                 {player.formerRoleId && (
                   <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.2em] text-blood">
                     Từng là {getRole(player.formerRoleId)?.name}, giờ đã hóa Sói

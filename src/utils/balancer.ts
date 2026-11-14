@@ -53,13 +53,14 @@ export const ROLE_WEIGHT: Record<RoleId, number> = {
   IDIOT: 2,
   FOX: 3,
   KAMIKAZE: 2,
+  HARLOT: 1,
   CUPID: -2,
   WILD_CHILD: -1,
   LYCAN: -1,
   WOLF: -6,
-  WOLF_CUB: -8,
-  WOLF_SEER: -8,
-  CURSED_WOLF: -9,
+  WOLF_CUB: -7,
+  WOLF_SEER: -7,
+  CURSED_WOLF: -8,
   WHITE_WOLF: -4,
 };
 
@@ -94,21 +95,25 @@ function mulberry32(seed: number) {
 /** Từ bao nhiêu người thì bộ tự cân bằng mới dùng vai này (vai rắc rối để bàn đông). */
 const AUTO_MIN: Partial<Record<SpecialRoleId, number>> = {
   GUARD: 5,
-  WITCH: 6,
-  HUNTER: 7,
-  ELDER: 8,
-  IDIOT: 8,
-  CUPID: 8,
   LYCAN: 5,
-  FOX: 9,
-  KAMIKAZE: 9,
-  WILD_CHILD: 9,
-  WOLF_CUB: 8,
-  CURSED_WOLF: 9,
-  WOLF_SEER: 10,
-  WHITE_WOLF: 12,
+  WITCH: 6,
+  HUNTER: 6,
+  ELDER: 6,
+  IDIOT: 6,
+  WOLF_CUB: 6,
+  CUPID: 7,
+  FOX: 7,
+  KAMIKAZE: 7,
+  WILD_CHILD: 7,
+  HARLOT: 7,
+  CURSED_WOLF: 7,
+  WOLF_SEER: 7,
+  WHITE_WOLF: 10,
 };
-const VILLAGE_POOL: SpecialRoleId[] = ["GUARD", "WITCH", "HUNTER", "ELDER", "IDIOT", "FOX", "CUPID", "LYCAN", "KAMIKAZE", "WILD_CHILD"];
+
+/** Vai "quen mặt"; bộ tự cân bằng ưu tiên bộ có nhiều vai ngoài nhóm này cho ván mới lạ. */
+const BASIC = new Set<RoleId>(["WOLF", "VILLAGER", "SEER", "GUARD", "WITCH", "HUNTER"]);
+const VILLAGE_POOL: SpecialRoleId[] = ["GUARD", "WITCH", "HUNTER", "ELDER", "IDIOT", "FOX", "CUPID", "LYCAN", "KAMIKAZE", "WILD_CHILD", "HARLOT"];
 const WOLF_POOL: SpecialRoleId[] = ["WOLF_CUB", "CURSED_WOLF", "WOLF_SEER", "WHITE_WOLF"];
 
 function randomDeck(n: number, rnd: () => number): DeckConfig {
@@ -122,7 +127,7 @@ function randomDeck(n: number, rnd: () => number): DeckConfig {
 
   // Đổi vài Sói thường thành Sói đặc biệt (luôn giữ ít nhất 1 Sói thường).
   const wolfPool = WOLF_POOL.filter((id) => n >= (AUTO_MIN[id] ?? 0) && (id !== "WHITE_WOLF" || wolves >= 3));
-  const wolfSpecials = wolves >= 2 && wolfPool.length ? (rnd() < 0.8 ? 1 : 0) + (n >= 12 && wolves >= 3 && rnd() < 0.5 ? 1 : 0) : 0;
+  const wolfSpecials = wolves >= 2 && wolfPool.length ? (rnd() < 0.85 ? 1 : 0) + (n >= 11 && wolves >= 3 && rnd() < 0.6 ? 1 : 0) : 0;
   for (let i = 0; i < wolfSpecials && wolfPool.length; i++) {
     deck[take(wolfPool)] = 1;
     deck.WOLF -= 1;
@@ -153,9 +158,21 @@ export function autoDeck(n: number, seed = 1): DeckConfig {
     return { deck, gap: Math.abs(balanceScore(resolveCounts(n, deck)) - TARGET) };
   });
   const best = Math.min(...scored.map((x) => x.gap));
-  const good = scored.filter((x) => x.gap <= best + 1);
+  const good = scored.filter((x) => x.gap <= best + 1.5);
+  // Bộ càng nhiều vai lạ càng dễ được chọn (vẫn ngẫu nhiên để mỗi ván một khác).
+  const exotic = (d: DeckConfig) => SPECIAL_ROLES.filter((id) => (d[id] ?? 0) > 0 && !BASIC.has(id)).length;
+  const weights = good.map((x) => 1 + exotic(x.deck) * 2);
+  let r = rnd() * weights.reduce((a, b) => a + b, 0);
+  let pick = good[good.length - 1];
+  for (let i = 0; i < good.length; i++) {
+    r -= weights[i];
+    if (r <= 0) {
+      pick = good[i];
+      break;
+    }
+  }
   // Tinh chỉnh thêm vài lá nếu bộ tốt nhất vẫn còn lệch (bàn rất đông ít lựa chọn hơn).
-  return rebalance(n, good[Math.floor(rnd() * good.length)].deck, false);
+  return rebalance(n, pick.deck, false);
 }
 
 const configOf = (c: DeckCounts): DeckConfig => {

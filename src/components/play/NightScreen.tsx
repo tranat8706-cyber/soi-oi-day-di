@@ -36,10 +36,11 @@ const VERB: Record<NightActionKey, string> = {
   SEER: "Tiên tri soi",
   FOX: "Cáo đánh hơi",
   KAMIKAZE: "Kẻ cảm tử lao vào",
+  HARLOT: "Con điếm ngủ nhà",
 };
 
 /** Các vai phe Làng mất phép khi Già làng bị treo. */
-const VILLAGE_POWERS: NightRoleId[] = ["GUARD", "WITCH", "SEER", "FOX", "KAMIKAZE"];
+const VILLAGE_POWERS: NightRoleId[] = ["GUARD", "WITCH", "SEER", "FOX", "KAMIKAZE", "HARLOT"];
 
 /** Bước này đã có lựa chọn nào chưa. */
 const stepDone = (rid: NightRoleId, a: NightActions) =>
@@ -344,6 +345,32 @@ export function NightScreen() {
                 big={wolf ? "Có Sói" : "Không có Sói"}
                 hint={wolf ? "Gật đầu với Cáo." : "Lắc đầu với Cáo. Cáo mất phép từ đêm sau."}
               />
+            )}
+          </>
+        );
+      }
+      case "HARLOT": {
+        const host = players.find((p) => p.id === a.HARLOT);
+        return (
+          <>
+            <Label>Đêm nay ngủ nhà ai?</Label>
+            <div className="mt-2">
+              <PlayerList
+                {...listProps("HARLOT", (p) =>
+                  p.roleId === "HARLOT" ? "Chính mình" : p.id === s.lastHarlotTargetId ? "Đã ngủ đêm trước" : null,
+                )}
+              />
+            </div>
+            {host && (
+              <p className="mt-4 rounded-xl border border-line px-4 py-3 text-sm leading-snug text-ash">
+                {isWolfRole(host.roleId) ? (
+                  <span className="text-blood">{host.name} là Sói: sáng ra Con điếm sẽ chết.</span>
+                ) : (
+                  <>
+                    Sói cắn vào nhà Con điếm thì Con điếm thoát. Nếu {host.name} bị Sói cắn chết đêm nay, Con điếm chết theo.
+                  </>
+                )}
+              </p>
             )}
           </>
         );

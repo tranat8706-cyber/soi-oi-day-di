@@ -16,6 +16,7 @@ export function PassAndPlayScreen() {
   const markRevealed = useGameStore((s) => s.markRevealed);
   const setGameState = useGameStore((s) => s.setGameState);
   const backToSetup = useGameStore((s) => s.backToSetup);
+  const setSetupStep = useGameStore((s) => s.setSetupStep);
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [confirmAbort, setConfirmAbort] = useState(false);
@@ -34,6 +35,7 @@ export function PassAndPlayScreen() {
       return;
     }
     backToSetup();
+    setSetupStep(2); // quay về đúng bước chọn bộ bài
   };
 
   return (

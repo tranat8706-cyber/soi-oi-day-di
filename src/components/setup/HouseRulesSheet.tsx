@@ -82,11 +82,6 @@ function Row({ title, hint, on, onToggle }: { title: string; hint: string; on: b
 }
 
 export function HouseRulesSheet({ open, onClose }: Props) {
-  const houseRules = useGameStore((s) => s.houseRules);
-  const setHouseRule = useGameStore((s) => s.setHouseRule);
-  const isSoundEnabled = useGameStore((s) => s.isSoundEnabled);
-  const toggleSound = useGameStore((s) => s.toggleSound);
-
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -136,6 +131,24 @@ export function HouseRulesSheet({ open, onClose }: Props) {
             </div>
 
             <div className="mt-4 min-h-0 overflow-y-auto pb-6">
+              <HouseRulesList />
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
+/** Danh sách luật nhà (dùng trong bảng trượt và ở bước 3 của màn chuẩn bị). */
+export function HouseRulesList() {
+  const houseRules = useGameStore((s) => s.houseRules);
+  const setHouseRule = useGameStore((s) => s.setHouseRule);
+  const isSoundEnabled = useGameStore((s) => s.isSoundEnabled);
+  const toggleSound = useGameStore((s) => s.toggleSound);
+
+  return (
+    <div className="border-t border-line">
               {RULES.map((r) => {
                 const on = houseRules[r.key] ?? r.def;
                 return <Row key={r.key} title={r.title} hint={r.hint} on={on} onToggle={() => setHouseRule(r.key, !on)} />;
@@ -171,10 +184,6 @@ export function HouseRulesSheet({ open, onClose }: Props) {
                 on={isSoundEnabled}
                 onToggle={toggleSound}
               />
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+    </div>
   );
 }

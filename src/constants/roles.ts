@@ -17,7 +17,8 @@ export type RoleId =
   | "WOLF_CUB"
   | "WOLF_SEER"
   | "LYCAN"
-  | "KAMIKAZE";
+  | "KAMIKAZE"
+  | "HARLOT";
 
 /** WOLVES: thức dậy cùng bầy, Tiên tri soi ra Sói. Sói trắng thuộc bầy nhưng thắng một mình. */
 export type Team = "WOLVES" | "VILLAGE";
@@ -245,6 +246,17 @@ export const ROLES: Record<RoleId, Role> = {
     isNightActive: true,
     nightOrder: 10,
   }),
+  HARLOT: r({
+    id: "HARLOT",
+    name: "Con điếm",
+    team: "VILLAGE",
+    tier: "FREE",
+    description:
+      "Mỗi đêm, bạn ngủ lại nhà một người khác. Sói cắn vào nhà bạn thì bạn thoát vì không có ở nhà. Nhưng nếu người bạn ngủ cùng bị Sói cắn chết, hoặc chính là Sói, bạn chết theo. Không được ngủ nhà một người hai đêm liền.",
+    gmInstruction: "Con điếm mở mắt. Đêm nay ngủ nhà ai? Chỉ tay. Con điếm nhắm mắt.",
+    isNightActive: true,
+    nightOrder: 2.5,
+  }),
 };
 
 /** Thứ tự hiển thị vai trong bộ bài. */
@@ -265,6 +277,7 @@ export const ROLE_ORDER: RoleId[] = [
   "WILD_CHILD",
   "LYCAN",
   "KAMIKAZE",
+  "HARLOT",
   "VILLAGER",
 ];
 
@@ -274,6 +287,9 @@ export const SPECIAL_ROLES = ROLE_ORDER.filter((id) => id !== "WOLF" && id !== "
   "WOLF" | "VILLAGER"
 >[];
 export type SpecialRoleId = Exclude<RoleId, "WOLF" | "VILLAGER">;
+
+/** Ảnh lá bài (public/cards/<id>.jpg). Vai mới chưa có ảnh thì bỏ khỏi đây để hiện chữ như cũ. */
+export const cardImage = (id: string | null | undefined) => (id && id in ROLES ? `/cards/${id.toLowerCase()}.jpg` : null);
 
 export const getRole = (id: string | null | undefined): Role | null =>
   id && id in ROLES ? ROLES[id as RoleId] : null;

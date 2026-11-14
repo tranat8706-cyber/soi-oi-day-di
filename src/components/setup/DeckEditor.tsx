@@ -2,7 +2,8 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { Minus, Plus, Scale, Shuffle, SlidersHorizontal } from "lucide-react";
-import { isWolfRole, ROLE_ORDER, ROLES, SPECIAL_ROLES, type RoleId } from "@/constants/roles";
+import Image from "next/image";
+import { cardImage, isWolfRole, ROLE_ORDER, ROLES, SPECIAL_ROLES, type RoleId } from "@/constants/roles";
 import { MIN_PLAYERS, useGameStore } from "@/store/gameStore";
 import { balanceVerdict, maxWolves, rebalance, resolveDeck, wolfTotal, type DeckConfig } from "@/utils/balancer";
 import { DeckSummary } from "../DeckSummary";
@@ -28,7 +29,18 @@ const BLURB: Record<RoleId, string> = {
   WILD_CHILD: "Đêm đầu chọn thần tượng. Thần tượng chết thì hóa Sói.",
   LYCAN: "Phe Làng, nhưng Tiên tri và Cáo soi ra Sói.",
   KAMIKAZE: "1 lần cả ván, đêm lao vào 1 người: cả hai cùng chết.",
+  HARLOT: "Đêm ngủ nhà người khác: Sói cắn nhà mình thì thoát, ngủ trúng Sói hay nạn nhân thì chết.",
 };
+
+/** Ảnh nhỏ của lá bài (hoặc ô trống cùng cỡ nếu vai chưa có ảnh). */
+function CardThumb({ id }: { id: RoleId }) {
+  const src = cardImage(id);
+  return (
+    <span className={`relative block h-[60px] w-11 shrink-0 overflow-hidden rounded-md ${src ? "" : "border border-dashed border-line"}`}>
+      {src && <Image src={src} alt="" fill sizes="44px" className="object-cover" />}
+    </span>
+  );
+}
 
 /** Bộ bài đang dùng (tự cân bằng hoặc tự chọn) cho n người. Dùng chung với màn chuẩn bị. */
 export function useCurrentDeck() {
@@ -53,14 +65,21 @@ export function DeckEditor() {
   const wolfCap = maxWolves(n);
   const verdict = balanceVerdict(counts);
 
+  /** Sói đặc biệt thay chỗ 1 Sói thường (giữ nguyên tổng số Sói), bỏ ra thì trả lại Sói thường. */
+  const swapsWolf = (id: RoleId) => id !== "WOLF" && isWolfRole(id);
+
   const change = (id: Exclude<RoleId, "VILLAGER">, delta: number) => {
     const lo = id === "WOLF" ? 1 : 0;
     const hi = id === "WOLF" ? wolfCap : 1;
     const next = Math.min(hi, Math.max(lo, counts[id] + delta));
-    setCustomDeck({ ...current, [id]: next });
+    const deck: DeckConfig = { ...current, [id]: next };
+    if (swapsWolf(id) && delta > 0 && counts.WOLF > 1) deck.WOLF = counts.WOLF - 1;
+    if (swapsWolf(id) && delta < 0) deck.WOLF = counts.WOLF + 1;
+    setCustomDeck(deck);
   };
 
   const canAdd = (id: RoleId) => {
+    if (swapsWolf(id)) return counts[id] < 1 && (counts.WOLF > 1 || (wolves < wolfCap && counts.VILLAGER > 0));
     if (counts.VILLAGER === 0) return false;
     if (isWolfRole(id) && wolves >= wolfCap) return false;
     return id === "WOLF" ? true : counts[id] < 1;
@@ -77,6 +96,7 @@ export function DeckEditor() {
     const wolfish = isWolfRole(id);
     return (
       <li key={id} className="flex min-h-20 items-center gap-3 border-b border-line py-2">
+        <CardThumb id={id} />
         <span className="min-w-0 flex-1">
           <span className={`flex items-center gap-2 text-lg font-medium ${wolfish ? "text-blood" : "text-bone"}`}>
             {ROLES[id].name}
@@ -192,6 +212,7 @@ export function DeckEditor() {
                 {wolves}/{wolfCap} lá
               </span>
             </p>
+            <p className="mt-1 text-xs leading-snug text-ash">Thêm một Sói đặc biệt sẽ thay chỗ 1 Sói thường, tổng số Sói giữ nguyên.</p>
             <ul className="mt-1">{wolfRoles.map(row)}</ul>
 
             <p className="mt-8 font-mono text-[10px] uppercase tracking-[0.25em] text-ash">Phe Làng</p>

@@ -40,6 +40,7 @@ export interface HouseRules {
 }
 
 export type TieRule = "ROULETTE" | "REVOTE" | "NONE";
+export type SetupStep = 1 | 2 | 3;
 
 /** Một bước có thể lùi lại: nhãn để hiện cho quản trò và ảnh chụp trạng thái ván ngay trước bước đó. */
 export interface UndoEntry {
@@ -65,7 +66,8 @@ export type NightRoleId =
   | "WITCH"
   | "SEER"
   | "FOX"
-  | "KAMIKAZE";
+  | "KAMIKAZE"
+  | "HARLOT";
 /** Mỗi lựa chọn trong đêm. Một bước có thể có nhiều lựa chọn (Phù thủy 2 bình, Sói cắn 2 khi Sói con chết…). */
 export type NightActionKey =
   | "CUPID" // "idA|idB"
@@ -80,7 +82,8 @@ export type NightActionKey =
   | "WITCH_KILL"
   | "SEER"
   | "FOX"
-  | "KAMIKAZE";
+  | "KAMIKAZE"
+  | "HARLOT";
 export type NightActions = Partial<Record<NightActionKey, string>>;
 
 /** Bước (vai) chứa lựa chọn này. */
@@ -107,6 +110,9 @@ interface GameStore {
   /** Bộ bài tự chọn; null = tự cân bằng theo số người. */
   customDeck: DeckConfig | null;
   setCustomDeck: (deck: DeckConfig | null) => void;
+  /** Bước đang mở ở màn chuẩn bị: 1 người chơi, 2 bộ bài, 3 luật chơi. */
+  setupStep: SetupStep;
+  setSetupStep: (step: SetupStep) => void;
   /** Seed của bộ tự cân bằng: giữ nguyên thì bộ bài xem trước khớp với lúc chia. */
   autoSeed: number;
   /** Đổi sang một bộ tự cân bằng khác. */
@@ -166,6 +172,8 @@ interface GameStore {
   idiotRevealedId: string | null;
   /** Kẻ cảm tử đã lao vào ai đó (1 lần cả ván). */
   kamikazeUsed: boolean;
+  /** Nhà Con điếm ngủ đêm trước (không được ngủ lại liền). */
+  lastHarlotTargetId: string | null;
   /** Đứa trẻ hoang vừa hóa Sói, quản trò cần báo cho họ ở đêm kế tiếp. */
   newWolfIds: string[];
   /** Các bước lớn (gọi làng dậy, treo, tha, bắn, sang đêm) để quản trò lùi lại khi lỡ tay. */
@@ -237,6 +245,7 @@ const freshRound = {
   foxPowerLost: false,
   idiotRevealedId: null as string | null,
   kamikazeUsed: false,
+  lastHarlotTargetId: null as string | null,
   newWolfIds: [] as string[],
   undoStack: [] as UndoEntry[],
   pendingHunterId: null as string | null,
@@ -315,6 +324,10 @@ const TITLE_POOLS: Record<string, { won: string[]; lost: string[] }> = {
   KAMIKAZE: {
     won: ["Cảm Tử Quân", "Một Đổi Một"],
     lost: ["Lao Nhầm Đồng Đội", "Hy Sinh Vô Ích"],
+  },
+  HARLOT: {
+    won: ["Ngủ Đâu Cũng Thoát", "Nữ Hoàng Bóng Đêm"],
+    lost: ["Ngủ Nhầm Nhà Sói", "Đi Đêm Có Ngày Gặp Sói"],
   },
   VILLAGER: {
     won: ["Kẻ Trắng Án", "Công Dân Gương Mẫu", "Thánh Sống Sót", "Thám Tử Lá Cải"],
@@ -403,6 +416,8 @@ export const useGameStore = create<GameStore>()(
 
       setOnboarded: (onboarded) => set({ onboarded }),
       setCustomDeck: (customDeck) => set({ customDeck }),
+      setupStep: 1,
+      setSetupStep: (setupStep) => set({ setupStep }),
       autoSeed: 1,
       rerollAutoDeck: () => set({ autoSeed: Math.floor(Math.random() * 1_000_000_000) }),
       setSessionTitle: (sessionTitle) => set({ sessionTitle }),
@@ -454,7 +469,7 @@ export const useGameStore = create<GameStore>()(
       markRevealed: (id) =>
         set((s) => (s.revealedIds.includes(id) ? s : { revealedIds: [...s.revealedIds, id] })),
 
-      backToSetup: () => set((s) => ({ ...freshRound, gameState: "SETUP", players: resetPlayers(s.players) })),
+      backToSetup: () => set((s) => ({ ...freshRound, gameState: "SETUP", setupStep: 1, players: resetPlayers(s.players) })),
 
       setNightAction: (roleId, targetId) =>
         set((s) => {
@@ -495,10 +510,14 @@ export const useGameStore = create<GameStore>()(
           let curseUsed = s.curseUsed;
           const cursedWolfAlive = players.some((p) => p.isAlive && p.roleId === "CURSED_WOLF");
           const bites = [...new Set([a.WOLF, s.cubRevenge ? a.WOLF_2 : undefined].filter((x): x is string => !!x))];
+          // Con điếm đi ngủ nhà người khác (mất phép thì ở nhà).
+          const harlot = players.find((p) => p.isAlive && p.roleId === "HARLOT");
+          const harlotHost = !lost && harlot && a.HARLOT && a.HARLOT !== harlot.id ? alive(a.HARLOT) : undefined;
 
           for (const id of bites) {
             const p = alive(id);
             if (!p) continue;
+            if (harlotHost && id === harlot?.id) continue; // cắn vào nhà trống
             if (!lost && id === a.GUARD) continue; // Bảo vệ che
             if (!lost && id === a.WITCH_SAVE) continue; // Phù thủy cứu
             if (p.roleId === "ELDER" && !elderHit) {
@@ -513,6 +532,9 @@ export const useGameStore = create<GameStore>()(
             }
             kills.push([id, "BITE"]);
           }
+          // Ngủ trúng nhà Sói, hoặc chủ nhà bị Sói cắn chết: Con điếm chết theo.
+          if (harlot && harlotHost && (isWolfRole(harlotHost.roleId) || kills.some(([id, c]) => id === harlotHost.id && c === "BITE")))
+            kills.push([harlot.id, "BITE"]);
           if (a.WHITE_WOLF && alive(a.WHITE_WOLF)) kills.push([a.WHITE_WOLF, "WHITE_WOLF"]);
           if (!lost && a.WITCH_KILL) kills.push([a.WITCH_KILL, "POISON"]); // bình độc xuyên khiên
 
@@ -543,6 +565,7 @@ export const useGameStore = create<GameStore>()(
             players: res.players,
             lastVictimIds: victims.map((p) => p.id),
             lastGuardTargetId: a.GUARD ?? null,
+            lastHarlotTargetId: harlotHost?.id ?? null,
             loverIds,
             wildModelId,
             elderHit,
