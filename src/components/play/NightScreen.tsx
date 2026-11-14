@@ -1,35 +1,77 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, EyeOff, Sun } from "lucide-react";
-import { NIGHT_SEQUENCE, type Role } from "@/constants/roles";
-import { useGameStore, type NightRoleId, type Player } from "@/store/gameStore";
+import { getRole, isWolfRole, looksLikeWolf, NIGHT_SEQUENCE, wakesOnNight, type Role } from "@/constants/roles";
+import {
+  stepOf,
+  useGameStore,
+  type NightActionKey,
+  type NightActions,
+  type NightRoleId,
+  type Player,
+} from "@/store/gameStore";
+import { countRoles } from "@/utils/balancer";
+import { foxGroup } from "@/utils/rules";
+import { DeckSummary } from "../DeckSummary";
 import { PlayerList } from "./PlayerList";
+import { StepBack } from "./StepBack";
 import { UndoToast, type ToastData } from "./UndoToast";
 
 const ease = [0.22, 1, 0.36, 1] as const;
 const pad = (n: number) => String(n).padStart(2, "0");
 
-const VERB: Record<NightRoleId, string> = { WOLF: "Sói cắn", SEER: "Tiên tri soi", GUARD: "Bảo vệ che" };
+const VERB: Record<NightActionKey, string> = {
+  CUPID: "Thần tình yêu ghép",
+  WILD_CHILD: "Đứa trẻ hoang chọn thần tượng",
+  GUARD: "Bảo vệ che",
+  WOLF: "Sói cắn",
+  WOLF_2: "Sói cắn thêm",
+  WOLF_CURSE: "Sói nguyền",
+  WOLF_SEER: "Sói tiên tri soi",
+  WHITE_WOLF: "Sói trắng giết",
+  WITCH_SAVE: "Phù thủy cứu",
+  WITCH_KILL: "Phù thủy đầu độc",
+  SEER: "Tiên tri soi",
+  FOX: "Cáo đánh hơi",
+  KAMIKAZE: "Kẻ cảm tử lao vào",
+};
+
+/** Các vai phe Làng mất phép khi Già làng bị treo. */
+const VILLAGE_POWERS: NightRoleId[] = ["GUARD", "WITCH", "SEER", "FOX", "KAMIKAZE"];
+
+/** Bước này đã có lựa chọn nào chưa. */
+const stepDone = (rid: NightRoleId, a: NightActions) =>
+  rid === "WITCH" ? !!(a.WITCH_SAVE || a.WITCH_KILL) : rid === "CUPID" ? (a.CUPID ?? "").split("|").length === 2 : !!a[rid];
+
+const Label = ({ children }: { children: ReactNode }) => (
+  <p className="mt-6 font-mono text-[10px] uppercase tracking-[0.25em] text-ash">{children}</p>
+);
 
 export function NightScreen() {
-  const players = useGameStore((s) => s.players);
-  const nightNumber = useGameStore((s) => s.nightNumber);
-  const nightActions = useGameStore((s) => s.nightActions);
-  const lastGuardTargetId = useGameStore((s) => s.lastGuardTargetId);
-  const guardSelf = useGameStore((s) => s.houseRules.bodyguardSelfProtect);
-  const setNightAction = useGameStore((s) => s.setNightAction);
-  const undoLastNightAction = useGameStore((s) => s.undoLastNightAction);
-  const resolveNight = useGameStore((s) => s.resolveNight);
-  const backToSetup = useGameStore((s) => s.backToSetup);
+  const s = useGameStore();
+  const {
+    players,
+    nightNumber,
+    nightActions,
+    lastGuardTargetId,
+    setNightAction,
+    undoLastNightAction,
+    resolveNight,
+    backToSetup,
+  } = s;
+  const guardSelf = s.houseRules.bodyguardSelfProtect;
+  const witchSeesVictim = s.houseRules.witchSeesVictim !== false;
 
-  // Chỉ những vai có trong ván này, theo nightOrder.
-  const steps = NIGHT_SEQUENCE.filter((r) => players.some((p) => p.roleId === r.id));
+  // Người giữ vai của từng bước. Bước Sói gọi cả bầy (kể cả Sói đặc biệt).
+  const holdersOf = (role: Role) =>
+    role.id === "WOLF" ? players.filter((p) => isWolfRole(p.roleId)) : players.filter((p) => p.roleId === role.id);
+  const steps = NIGHT_SEQUENCE.filter((r) => wakesOnNight(r, nightNumber) && holdersOf(r).length > 0);
   const nameOf = (id: string | undefined) => players.find((p) => p.id === id)?.name;
 
   const [openId, setOpenId] = useState<string | null>(
-    () => steps.find((r) => !nightActions[r.id as NightRoleId])?.id ?? null,
+    () => steps.find((r) => !stepDone(r.id as NightRoleId, nightActions))?.id ?? null,
   );
   const [toast, setToast] = useState<ToastData | null>(null);
   const [confirmWake, setConfirmWake] = useState(false);
@@ -47,21 +89,33 @@ export function NightScreen() {
 
   const hideToast = useCallback(() => setToast(null), []);
 
-  const choose = (roleId: NightRoleId, target: Player) => {
-    if (nightActions[roleId] === target.id) return;
-    setNightAction(roleId, target.id);
-    setConfirmWake(false);
+  const notify = (message: string) => {
     toastSeq.current += 1;
-    setToast({ id: toastSeq.current, message: `${VERB[roleId]} ${target.name}.` });
+    setToast({ id: toastSeq.current, message });
+  };
+
+  const choose = (key: NightActionKey, target: Player | null) => {
+    if ((nightActions[key] ?? null) === (target?.id ?? null)) return;
+    setNightAction(key, target?.id ?? null);
+    setConfirmWake(false);
+    notify(target ? `${VERB[key]} ${target.name}.` : `Bỏ: ${VERB[key].toLowerCase()}.`);
+  };
+
+  /** Thần tình yêu: chọn đủ 2 người. */
+  const toggleLover = (p: Player) => {
+    const cur = (nightActions.CUPID ?? "").split("|").filter(Boolean);
+    const next = cur.includes(p.id) ? cur.filter((id) => id !== p.id) : cur.length < 2 ? [...cur, p.id] : [cur[0], p.id];
+    setNightAction("CUPID", next.length ? next.join("|") : null);
+    if (next.length === 2) notify(`${VERB.CUPID} ${next.map((id) => nameOf(id)).join(" ♥ ")}.`);
   };
 
   const undo = () => {
     const undone = undoLastNightAction();
     setToast(null);
-    if (undone) setOpenId(undone.roleId);
+    if (undone) setOpenId(stepOf(undone.roleId));
   };
 
-  const wolvesAlive = players.some((p) => p.isAlive && p.roleId === "WOLF");
+  const wolvesAlive = players.some((p) => p.isAlive && isWolfRole(p.roleId));
   const missingBite = wolvesAlive && !nightActions.WOLF;
 
   const onWake = () => {
@@ -83,14 +137,238 @@ export function NightScreen() {
     backToSetup();
   };
 
-  const disabledReason = (role: Role) => (p: Player) => {
-    if (role.id === "WOLF" && p.roleId === "WOLF") return "Đồng bọn";
-    if (role.id === "SEER" && p.roleId === "SEER") return "Không tự soi";
-    if (role.id === "GUARD") {
-      if (p.id === lastGuardTargetId) return "Đã che đêm trước";
-      if (!guardSelf && p.roleId === "GUARD") return "Không tự che";
-    }
+  /** Vì sao bước này không chọn được (vai đã chết thì vẫn gọi để giữ bí mật). */
+  const blockedReason = (rid: NightRoleId, holders: Player[]) => {
+    if (holders.every((p) => !p.isAlive)) return "dead";
+    if (s.villagePowersLost && VILLAGE_POWERS.includes(rid)) return "elder";
+    if (rid === "FOX" && s.foxPowerLost) return "fox";
+    if (rid === "KAMIKAZE" && s.kamikazeUsed) return "used";
     return null;
+  };
+
+  const summaryOf = (rid: NightRoleId) => {
+    const a = nightActions;
+    switch (rid) {
+      case "WITCH":
+        return [a.WITCH_SAVE && `Cứu ${nameOf(a.WITCH_SAVE)}`, a.WITCH_KILL && `Độc ${nameOf(a.WITCH_KILL)}`].filter(Boolean).join(" · ") || "Chưa dùng bình";
+      case "CUPID": {
+        const ids = (a.CUPID ?? "").split("|").filter(Boolean);
+        return ids.length ? ids.map((id) => nameOf(id)).join(" ♥ ") : null;
+      }
+      case "WOLF": {
+        const parts = [a.WOLF && `${a.WOLF_CURSE === a.WOLF ? "Nguyền" : "Cắn"} ${nameOf(a.WOLF)}`, s.cubRevenge && a.WOLF_2 && `cắn thêm ${nameOf(a.WOLF_2)}`];
+        return parts.filter(Boolean).join(" · ") || null;
+      }
+      default:
+        return a[rid] ? `${VERB[rid]} · ${nameOf(a[rid])}` : null;
+    }
+  };
+
+  const listProps = (key: NightActionKey, disabled?: (p: Player) => string | null) => ({
+    players,
+    showRoles: true,
+    selectedId: nightActions[key],
+    onSelect: (p: Player) => choose(key, nightActions[key] === p.id && key !== "WOLF" && key !== "GUARD" && key !== "SEER" ? null : p),
+    disabledReason: disabled,
+  });
+
+  const stepBody = (role: Role) => {
+    const rid = role.id as NightRoleId;
+    const a = nightActions;
+    switch (rid) {
+      case "CUPID": {
+        const ids = (a.CUPID ?? "").split("|").filter(Boolean);
+        return (
+          <>
+            <Label>Chọn 2 người yêu nhau · {ids.length}/2</Label>
+            <div className="mt-2">
+              <PlayerList players={players} showRoles selectedIds={ids} onSelect={toggleLover} />
+            </div>
+          </>
+        );
+      }
+      case "WILD_CHILD":
+        return (
+          <>
+            <Label>Chọn thần tượng</Label>
+            <div className="mt-2">
+              <PlayerList {...listProps("WILD_CHILD", (p) => (p.roleId === "WILD_CHILD" ? "Chính mình" : null))} />
+            </div>
+          </>
+        );
+      case "GUARD":
+        return (
+          <>
+            <Label>Chọn người được che</Label>
+            <div className="mt-2">
+              <PlayerList
+                {...listProps("GUARD", (p) =>
+                  p.id === lastGuardTargetId ? "Đã che đêm trước" : !guardSelf && p.roleId === "GUARD" ? "Không tự che" : null,
+                )}
+              />
+            </div>
+          </>
+        );
+      case "WOLF": {
+        const target = players.find((p) => p.id === a.WOLF);
+        const canCurse = !s.curseUsed && players.some((p) => p.isAlive && p.roleId === "CURSED_WOLF");
+        const cursing = !!target && a.WOLF_CURSE === target.id;
+        const pack = (p: Player) => (isWolfRole(p.roleId) ? "Đồng bọn" : null);
+        const turned = players.filter((p) => s.newWolfIds.includes(p.id) && p.isAlive);
+        return (
+          <>
+            {turned.map((p) => (
+              <p key={p.id} className="mt-5 rounded-xl border border-blood/50 bg-blood/10 px-4 py-3 text-sm leading-snug text-bone">
+                <span className="font-semibold text-blood">{p.name} vừa hóa Sói</span> (từng là {getRole(p.formerRoleId)?.name}, thần
+                tượng đã chết). Chạm vai {p.name} để họ mở mắt dậy cùng bầy từ đêm nay.
+              </p>
+            ))}
+            {s.cubRevenge && (
+              <p className="mt-5 rounded-xl border border-blood/50 bg-blood/10 px-4 py-3 text-sm leading-snug text-bone">
+                <span className="font-semibold text-blood">Sói con đã chết.</span> Bầy nổi giận: đêm nay được cắn 2 người. Đọc thêm: “Sói
+                hãy chọn thêm một người nữa.”
+              </p>
+            )}
+            <Label>{s.cubRevenge ? "Người thứ nhất" : "Chọn người bị cắn"}</Label>
+            <div className="mt-2">
+              <PlayerList {...listProps("WOLF", pack)} />
+            </div>
+            {canCurse && target && (
+              <button
+                type="button"
+                onClick={() => choose("WOLF_CURSE", cursing ? null : target)}
+                aria-pressed={cursing}
+                className={`mt-4 flex min-h-16 w-full items-center justify-between rounded-xl px-4 text-left transition-colors ${
+                  cursing ? "bg-blood text-bone" : "border border-blood/50 text-bone active:bg-ink"
+                }`}
+              >
+                <span>
+                  <span className="block text-lg font-medium">{cursing ? `Đã nguyền ${target.name}` : `Nguyền ${target.name} thành Sói`}</span>
+                  <span className="block text-xs text-bone/70">Sói nguyền · 1 lần cả ván · không chết mà hóa Sói</span>
+                </span>
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em]">{cursing ? "Chạm để bỏ" : ""}</span>
+              </button>
+            )}
+            {cursing && (
+              <p className="mt-2 text-sm leading-snug text-ash">
+                Khi cả làng nhắm mắt, chạm vai {target!.name} báo họ đã thành Sói, từ đêm sau dậy cùng bầy.
+              </p>
+            )}
+            {s.cubRevenge && (
+              <>
+                <Label>Người thứ hai</Label>
+                <div className="mt-2">
+                  <PlayerList {...listProps("WOLF_2", (p) => pack(p) ?? (p.id === a.WOLF ? "Đã chọn" : null))} />
+                </div>
+              </>
+            )}
+          </>
+        );
+      }
+      case "WOLF_SEER": {
+        const t = players.find((p) => p.id === a.WOLF_SEER);
+        return (
+          <>
+            <Label>Chọn người muốn soi</Label>
+            <div className="mt-2">
+              <PlayerList {...listProps("WOLF_SEER", (p) => (isWolfRole(p.roleId) ? "Đồng bọn" : null))} />
+            </div>
+            {t && <ResultCard danger={t.roleId === "SEER"} who={t.name} big={getRole(t.roleId)?.name ?? "?"} hint="Ra hiệu vai này cho Sói tiên tri." />}
+          </>
+        );
+      }
+      case "WHITE_WOLF":
+        return (
+          <>
+            <Label>Chọn một con Sói để giết (hoặc bỏ qua)</Label>
+            <div className="mt-2">
+              <PlayerList
+                {...listProps("WHITE_WOLF", (p) =>
+                  p.roleId === "WHITE_WOLF" ? "Chính mình" : !isWolfRole(p.roleId) ? "Không phải Sói" : null,
+                )}
+              />
+            </div>
+          </>
+        );
+      case "WITCH":
+        return (
+          <WitchStep
+            players={players}
+            actions={a}
+            secondBite={s.cubRevenge ? a.WOLF_2 : undefined}
+            healUsed={s.witchHealUsed}
+            poisonUsed={s.witchPoisonUsed}
+            seesVictim={witchSeesVictim}
+            onChoose={choose}
+          />
+        );
+      case "SEER": {
+        const t = players.find((p) => p.id === a.SEER);
+        const wolf = !!t && looksLikeWolf(t.roleId);
+        return (
+          <>
+            <Label>Chọn người muốn soi</Label>
+            <div className="mt-2">
+              <PlayerList {...listProps("SEER", (p) => (p.roleId === "SEER" ? "Không tự soi" : null))} />
+            </div>
+            {t && (
+              <ResultCard
+                danger={wolf}
+                who={t.name}
+                big={wolf ? "Là Sói" : "Không phải Sói"}
+                hint={
+                  t.roleId === "LYCAN"
+                    ? "Gật đầu với Tiên tri. (Thật ra là Bán sói, phe Làng.)"
+                    : wolf
+                      ? "Gật đầu với Tiên tri."
+                      : "Lắc đầu với Tiên tri."
+                }
+              />
+            )}
+          </>
+        );
+      }
+      case "FOX": {
+        const group = a.FOX ? foxGroup(players, a.FOX) : [];
+        const wolf = group.some((p) => looksLikeWolf(p.roleId));
+        return (
+          <>
+            <Label>Chỉ vào một người</Label>
+            <div className="mt-2">
+              <PlayerList {...listProps("FOX")} />
+            </div>
+            {group.length > 0 && (
+              <ResultCard
+                danger={wolf}
+                who={group.map((p) => p.name).join(" · ")}
+                big={wolf ? "Có Sói" : "Không có Sói"}
+                hint={wolf ? "Gật đầu với Cáo." : "Lắc đầu với Cáo. Cáo mất phép từ đêm sau."}
+              />
+            )}
+          </>
+        );
+      }
+      case "KAMIKAZE": {
+        const t = players.find((p) => p.id === a.KAMIKAZE);
+        const self = holdersOf(role)[0];
+        return (
+          <>
+            <Label>Lao vào ai? Không chọn = đêm nay chưa dùng</Label>
+            <div className="mt-2">
+              <PlayerList {...listProps("KAMIKAZE", (p) => (p.roleId === "KAMIKAZE" ? "Chính mình" : null))} />
+            </div>
+            {t && self && (
+              <ResultCard
+                danger
+                who={`${self.name} + ${t.name}`}
+                big="Cả hai cùng chết"
+                hint="Sáng ra cả hai ra đi, Bảo vệ hay Phù thủy đều không cứu được. Chỉ dùng 1 lần cả ván."
+              />
+            )}
+          </>
+        );
+      }
+    }
   };
 
   return (
@@ -102,6 +380,8 @@ export function NightScreen() {
     >
       <header className="flex items-center justify-between px-safe pt-2">
         <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">04 — Đêm {pad(nightNumber)}</p>
+        <span className="flex items-center">
+        <StepBack />
         <button
           type="button"
           onClick={onAbortTap}
@@ -111,6 +391,7 @@ export function NightScreen() {
         >
           {confirmAbort ? "Chạm lần nữa để hủy" : "Hủy ván"}
         </button>
+        </span>
       </header>
 
       <main className="flex-1 px-safe pb-48">
@@ -132,15 +413,25 @@ export function NightScreen() {
           </p>
         </div>
 
+        {s.villagePowersLost && (
+          <p className="mt-4 rounded-2xl border border-line px-4 py-3 text-sm leading-snug text-ash">
+            Già làng đã chết dưới tay phe Làng: các vai phép phe Làng mất phép. Vẫn gọi từng vai như thường để giữ bí mật.
+          </p>
+        )}
+
+        <div className="mt-6">
+          <DeckSummary counts={countRoles(players)} label="Bộ bài ván này" size="sm" />
+        </div>
+
         <ol className="mt-8 flex flex-col gap-3">
           {steps.map((role, idx) => {
             const rid = role.id as NightRoleId;
             const open = openId === role.id;
-            const targetId = nightActions[rid];
-            const holders = players.filter((p) => p.roleId === role.id);
-            const allDead = holders.every((p) => !p.isAlive);
+            const holders = holdersOf(role);
+            const blocked = blockedReason(rid, holders);
+            const done = stepDone(rid, nightActions);
             const next = steps[idx + 1];
-            const seerTarget = rid === "SEER" ? players.find((p) => p.id === targetId) : undefined;
+            const summary = summaryOf(rid);
 
             return (
               <li
@@ -160,21 +451,28 @@ export function NightScreen() {
                 >
                   <span
                     className={`grid size-10 shrink-0 place-items-center rounded-full font-mono text-sm tabular-nums ${
-                      targetId || allDead ? "bg-bone text-ink" : "border border-line text-ash"
+                      done || blocked ? "bg-bone text-ink" : "border border-line text-ash"
                     }`}
                   >
                     {idx + 1}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className={`block font-display text-3xl uppercase leading-none ${allDead ? "text-neutral-500 line-through" : "text-bone"}`}>
-                      {role.name}
+                    <span
+                      className={`block font-display text-3xl uppercase leading-none ${
+                        blocked ? "text-neutral-500 line-through" : "text-bone"
+                      }`}
+                    >
+                      {role.id === "WOLF" ? "Bầy Sói" : role.name}
                     </span>
                     <span className="mt-1.5 block truncate font-mono text-[10px] uppercase tracking-[0.18em] text-ash">
-                      {allDead
+                      {blocked === "dead"
                         ? "Đã chết · vẫn gọi để giữ bí mật"
-                        : targetId
-                          ? `${VERB[rid]} · ${nameOf(targetId)}`
-                          : `${holders.filter((p) => p.isAlive).length} người · chưa chọn`}
+                        : blocked
+                          ? "Mất phép · vẫn gọi để giữ bí mật"
+                          : (summary ??
+                            `${holders.filter((p) => p.isAlive).length} người · chưa chọn${
+                              role.firstNightOnly ? " · chỉ đêm đầu" : role.evenNightsOnly ? " · đêm chẵn" : ""
+                            }`)}
                     </span>
                   </span>
                   <ChevronDown
@@ -192,63 +490,39 @@ export function NightScreen() {
                       transition={{ duration: 0.3, ease }}
                     >
                       <div className="px-4 pb-4">
-                        <p className="border-l-2 border-blood pl-4 text-xl leading-relaxed text-bone">
-                          “{role.gmInstruction}”
-                        </p>
-
-                        {allDead ? (
-                          <p className="mt-5 text-sm leading-relaxed text-ash">
-                            Không còn ai giữ vai này. Vẫn đọc lời gọi, chờ vài giây rồi qua bước tiếp, để không ai đoán được vai đã chết.
+                        <p className="border-l-2 border-blood pl-4 text-xl leading-relaxed text-bone">“{role.gmInstruction}”</p>
+                        {role.id === "WOLF" && holders.some((p) => p.roleId !== "WOLF") && (
+                          <p className="mt-3 text-sm leading-snug text-ash">
+                            Cả bầy cùng dậy:{" "}
+                            {holders
+                              .filter((p) => p.isAlive)
+                              .map((p) => `${p.name} (${p.formerRoleId ? `${getRole(p.formerRoleId)?.name} → Sói` : getRole(p.roleId)?.name})`)
+                              .join(", ")}
+                            .
                           </p>
-                        ) : (
-                          <>
-                            <p className="mt-6 font-mono text-[10px] uppercase tracking-[0.25em] text-ash">
-                              Chọn mục tiêu
-                            </p>
-                            <div className="mt-2">
-                              <PlayerList
-                                players={players}
-                                showRoles
-                                selectedId={targetId}
-                                onSelect={(p) => choose(rid, p)}
-                                disabledReason={disabledReason(role)}
-                              />
-                            </div>
-                          </>
                         )}
 
-                        <AnimatePresence mode="wait">
-                          {seerTarget && (
-                            <motion.div
-                              key={seerTarget.id}
-                              initial={{ opacity: 0, scale: 0.94 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              exit={{ opacity: 0 }}
-                              transition={{ duration: 0.25, ease }}
-                              className={`mt-5 rounded-2xl px-5 py-6 text-center ${
-                                seerTarget.roleId === "WOLF" ? "bg-blood text-bone" : "border border-bone/40 text-bone"
-                              }`}
-                              aria-live="assertive"
-                            >
-                              <p className="font-mono text-[10px] uppercase tracking-[0.25em] opacity-80">
-                                {seerTarget.name}
-                              </p>
-                              <p className="mt-2 font-display text-5xl uppercase leading-none">
-                                {seerTarget.roleId === "WOLF" ? "Là Sói" : "Không phải Sói"}
-                              </p>
-                              <p className="mt-3 text-sm opacity-80">
-                                {seerTarget.roleId === "WOLF" ? "Gật đầu với Tiên tri." : "Lắc đầu với Tiên tri."}
-                              </p>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
+                        {blocked ? (
+                          <p className="mt-5 text-sm leading-relaxed text-ash">
+                            {blocked === "dead"
+                              ? "Không còn ai giữ vai này."
+                              : blocked === "fox"
+                                ? "Cáo đã đánh hơi trượt một lần nên mất phép."
+                                : blocked === "used"
+                                  ? "Kẻ cảm tử đã lao vào một lần."
+                                  : "Già làng đã chết dưới tay phe Làng nên vai này mất phép."}{" "}
+                            Vẫn đọc lời gọi, chờ vài giây rồi qua bước tiếp, để không ai đoán được.
+                          </p>
+                        ) : (
+                          stepBody(role)
+                        )}
 
                         <button
                           type="button"
                           onClick={() => setOpenId(next?.id ?? null)}
                           className="mt-5 flex h-16 w-full items-center justify-center rounded-xl border border-line font-mono text-xs uppercase tracking-[0.2em] text-bone active:bg-ink"
                         >
-                          {next ? `Xong · gọi ${next.name}` : "Xong · thu gọn"}
+                          {next ? `Xong · gọi ${next.id === "WOLF" ? "bầy Sói" : next.name}` : "Xong · thu gọn"}
                         </button>
                       </div>
                     </motion.div>
@@ -277,9 +551,7 @@ export function NightScreen() {
               <span className="text-left">
                 <span className="block font-display text-3xl uppercase leading-none">Gọi làng dậy</span>
                 {confirmWake && (
-                  <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.18em]">
-                    Sói chưa cắn ai · chạm lần nữa
-                  </span>
+                  <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.18em]">Sói chưa cắn ai · chạm lần nữa</span>
                 )}
               </span>
               <Sun className="size-7" strokeWidth={2} />
@@ -288,5 +560,115 @@ export function NightScreen() {
         </div>
       </div>
     </motion.div>
+  );
+}
+
+/** Thẻ kết quả soi (Tiên tri, Sói tiên tri, Cáo). */
+function ResultCard({ danger, who, big, hint }: { danger: boolean; who: string; big: string; hint: string }) {
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={who + big}
+        initial={{ opacity: 0, scale: 0.94 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.25, ease }}
+        className={`mt-5 rounded-2xl px-5 py-6 text-center ${danger ? "bg-blood text-bone" : "border border-bone/40 text-bone"}`}
+        aria-live="assertive"
+      >
+        <p className="font-mono text-[10px] uppercase tracking-[0.25em] opacity-80">{who}</p>
+        <p className="mt-2 pt-[0.1em] font-display text-5xl uppercase leading-[1.05]">{big}</p>
+        <p className="mt-3 text-sm opacity-80">{hint}</p>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+/** Bước Phù thủy: xem ai bị cắn, dùng bình cứu và/hoặc bình độc. */
+function WitchStep({
+  players,
+  actions,
+  secondBite,
+  healUsed,
+  poisonUsed,
+  seesVictim,
+  onChoose,
+}: {
+  players: Player[];
+  actions: NightActions;
+  /** Người bị cắn thêm khi Sói con báo thù. */
+  secondBite?: string;
+  healUsed: boolean;
+  poisonUsed: boolean;
+  seesVictim: boolean;
+  onChoose: (key: NightActionKey, target: Player | null) => void;
+}) {
+  const bitten = [actions.WOLF, secondBite]
+    .map((id) => players.find((p) => p.id === id && p.isAlive))
+    .filter((p, i, arr): p is Player => !!p && arr.indexOf(p) === i);
+  const names = bitten.map((p) => p.name).join(" và ");
+  const guarded = bitten.filter((p) => actions.GUARD === p.id);
+
+  return (
+    <div className="mt-6 space-y-6">
+      <div className="rounded-2xl border border-line px-4 py-4">
+        <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-ash">Đêm nay Sói cắn</p>
+        <p className={`mt-1 pt-[0.1em] font-display text-4xl uppercase leading-[1.1] ${bitten.length ? "text-blood" : "text-ash"}`}>
+          {bitten.length ? names : "Chưa có ai"}
+        </p>
+        <p className="mt-2 text-sm leading-snug text-ash">
+          {!bitten.length
+            ? "Sói chưa chọn hoặc không cắn ai. Quay lại bước Sói nếu cần."
+            : seesVictim
+              ? `Chỉ tay vào ${names} cho Phù thủy thấy.${bitten.length > 1 ? " Bình cứu chỉ cứu được 1 người." : ""}`
+              : "Luật nhà: không cho Phù thủy biết ai bị cắn. Chỉ hỏi có muốn cứu hay không."}
+          {guarded.length > 0 && ` Bảo vệ đã che ${guarded[0].name} nên dù không cứu vẫn sống.`}
+        </p>
+      </div>
+
+      <div>
+        <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-ash">Bình cứu · {healUsed ? "đã dùng" : "còn 1"}</p>
+        {healUsed || !bitten.length ? (
+          <p className="mt-2 flex min-h-16 items-center rounded-xl border border-line px-4 text-lg font-medium text-bone opacity-30">
+            {healUsed ? "Đã dùng ở đêm trước" : "Không có ai để cứu"}
+          </p>
+        ) : (
+          bitten.map((p) => {
+            const saving = actions.WITCH_SAVE === p.id;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => onChoose("WITCH_SAVE", saving ? null : p)}
+                aria-pressed={saving}
+                className={`mt-2 flex min-h-16 w-full items-center justify-between rounded-xl px-4 text-left transition-colors ${
+                  saving ? "bg-moss/25 text-bone ring-1 ring-moss" : "border border-line text-bone active:bg-ink"
+                }`}
+              >
+                <span className="text-lg font-medium">{saving ? `Đã cứu ${p.name}` : `Cứu ${p.name}`}</span>
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ash">{saving ? "Chạm để bỏ" : ""}</span>
+              </button>
+            );
+          })
+        )}
+      </div>
+
+      <div>
+        <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-ash">
+          Bình độc · {poisonUsed ? "đã dùng" : "còn 1 · chạm người muốn đầu độc"}
+        </p>
+        {!poisonUsed && (
+          <div className="mt-2">
+            <PlayerList
+              players={players}
+              showRoles
+              selectedId={actions.WITCH_KILL}
+              onSelect={(p) => onChoose("WITCH_KILL", actions.WITCH_KILL === p.id ? null : p)}
+              disabledReason={(p) => (p.roleId === "WITCH" ? "Không tự đầu độc" : null)}
+            />
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

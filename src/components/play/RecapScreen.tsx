@@ -4,13 +4,22 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { RotateCcw } from "lucide-react";
 import { getRole } from "@/constants/roles";
-import { useGameStore, type Player } from "@/store/gameStore";
+import { useGameStore, type Player, type Winner } from "@/store/gameStore";
+import { StepBack } from "./StepBack";
 
 const ease = [0.22, 1, 0.36, 1] as const;
 const pad = (n: number) => String(n).padStart(2, "0");
 
 const GRAIN =
   "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")";
+
+/** Chữ, màu và quầng sáng theo phe thắng. */
+const WIN_LOOK: Record<Winner, { top: string; text: string; glow: string; size: string }> = {
+  WOLF: { top: "Sói", text: "text-blood", glow: "bg-blood/40", size: "text-[18cqw]" },
+  VILLAGER: { top: "Làng", text: "text-moss", glow: "bg-moss/30", size: "text-[18cqw]" },
+  LOVERS: { top: "Cặp đôi", text: "text-rose", glow: "bg-rose/35", size: "text-[15cqw]" },
+  WHITE_WOLF: { top: "Sói trắng", text: "text-bone", glow: "bg-bone/20", size: "text-[14cqw]" },
+};
 
 /** Lệch nhẹ cho mỗi tấm polaroid, cố định theo vị trí. */
 const tilt = (i: number) => (((i * 37) % 7) - 3) * 0.9;
@@ -35,15 +44,19 @@ export function RecapScreen() {
     new Date().toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }),
   );
 
-  const wolfWin = winner === "WOLF";
-  const accent = wolfWin ? "text-blood" : "text-moss";
+  const loverIds = useGameStore((s) => s.loverIds);
+  const look = WIN_LOOK[winner ?? "VILLAGER"];
+  const accent = look.text;
   const n = cols(players.length);
 
   return (
     <div className="mx-auto flex w-full max-w-xl flex-1 flex-col items-center pt-safe">
-      <p className="w-full px-safe pt-3 font-mono text-[11px] uppercase tracking-[0.25em] text-ash">
-        06 — Hạ màn · chụp màn hình để đăng Story
-      </p>
+      <div className="flex w-full items-center justify-between px-safe">
+        <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">06 — Hạ màn · chụp để đăng Story</p>
+        <span className="-mr-3">
+          <StepBack />
+        </span>
+      </div>
 
       {/* Thẻ 9:16, mọi kích thước tính theo cqw để chụp ở máy nào cũng giống nhau */}
       <motion.section
@@ -56,9 +69,7 @@ export function RecapScreen() {
         {/* Quầng màu phe thắng */}
         <motion.div
           aria-hidden
-          className={`absolute -top-[25%] left-1/2 h-[70%] w-[140%] -translate-x-1/2 rounded-full blur-3xl ${
-            wolfWin ? "bg-blood/40" : "bg-moss/30"
-          }`}
+          className={`absolute -top-[25%] left-1/2 h-[70%] w-[140%] -translate-x-1/2 rounded-full blur-3xl ${look.glow}`}
           animate={{ opacity: [0.55, 1, 0.7, 0.95, 0.55] }}
           transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
         />
@@ -79,21 +90,11 @@ export function RecapScreen() {
             initial={{ opacity: 0, filter: "blur(12px)", letterSpacing: "0.2em" }}
             animate={{ opacity: [0, 1, 0.6, 1, 0.85, 1], filter: "blur(0px)", letterSpacing: "0em" }}
             transition={{ duration: 2.2, ease, times: [0, 0.35, 0.45, 0.6, 0.7, 1] }}
-            className={`mt-[4cqw] pt-[0.1em] font-display text-[18cqw] uppercase leading-[1.02] ${accent}`}
+            className={`mt-[4cqw] pt-[0.1em] font-display uppercase leading-[1.02] ${accent} ${look.size}`}
           >
-            {wolfWin ? (
-              <>
-                Sói
-                <br />
-                thắng.
-              </>
-            ) : (
-              <>
-                Làng
-                <br />
-                thắng.
-              </>
-            )}
+            {look.top}
+            <br />
+            thắng.
           </motion.h1>
 
           <motion.div
@@ -116,7 +117,7 @@ export function RecapScreen() {
             style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
           >
             {players.map((p, i) => (
-              <Polaroid key={p.id} player={p} index={i} cols={n} title={trollTitles[p.id]} />
+              <Polaroid key={p.id} player={p} index={i} cols={n} title={trollTitles[p.id]} lover={loverIds.includes(p.id)} />
             ))}
           </div>
         </div>
@@ -144,10 +145,23 @@ export function RecapScreen() {
   );
 }
 
-function Polaroid({ player, index, cols, title }: { player: Player; index: number; cols: number; title?: string }) {
+function Polaroid({
+  player,
+  index,
+  cols,
+  title,
+  lover,
+}: {
+  player: Player;
+  index: number;
+  cols: number;
+  title?: string;
+  lover?: boolean;
+}) {
   const role = getRole(player.roleId);
+  const former = getRole(player.formerRoleId);
   const dead = !player.isAlive;
-  const isWolf = player.roleId === "WOLF";
+  const isWolf = role?.team === "WOLVES";
   // cqw ở đây vẫn theo thẻ (container gần nhất), chia theo số cột.
   const unit = 1 / cols;
 
@@ -205,7 +219,8 @@ function Polaroid({ player, index, cols, title }: { player: Player; index: numbe
           className={`mt-[0.4cqw] block truncate font-mono uppercase tracking-wider ${isWolf ? "text-blood" : "text-ink/60"}`}
           style={{ fontSize: `${6.4 * unit}cqw` }}
         >
-          {role?.name ?? "?"}
+          {lover && "♥ "}
+          {former ? `${former.name} → ${role?.name}` : (role?.name ?? "?")}
         </span>
         {title && (
           <span className="block truncate italic leading-tight text-ink/80" style={{ fontSize: `${7.4 * unit}cqw` }}>

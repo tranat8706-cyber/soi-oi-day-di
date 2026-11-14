@@ -13,40 +13,31 @@ const vibrate = (p: number | number[]) => {
 };
 
 interface Props {
-  players: Player[]; // những người còn sống
+  /** Những người bằng phiếu nhau. */
+  players: Player[];
   onClose: () => void;
-  onExecute: (player: Player) => void;
+  /** Người bị vòng quay gọi tên sẽ lên giàn bào chữa. */
+  onPicked: (player: Player) => void;
 }
 
 type Phase = "pick" | "spinning" | "locked";
 
 /**
  * Vòng quay tử thần: chạy tên nhanh rồi chậm dần (ease-out bậc 3), chốt vào
- * kết quả đã random từ trước. Quản trò có thể bỏ bớt người không bị hòa phiếu.
+ * kết quả đã random từ trước, giữa những người hòa phiếu.
  */
-export function DeathRoulette({ players, onClose, onExecute }: Props) {
-  const [excluded, setExcluded] = useState<Set<string>>(() => new Set());
+export function DeathRoulette({ players, onClose, onPicked }: Props) {
   const [phase, setPhase] = useState<Phase>("pick");
   const [cursor, setCursor] = useState(0);
   const [tick, setTick] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const pool = players.filter((p) => !excluded.has(p.id));
+  const pool = players;
   const current = phase === "pick" ? null : pool[cursor];
 
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
   }, []);
-
-  const toggle = (id: string) => {
-    if (phase !== "pick") return;
-    setExcluded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
 
   const spin = () => {
     if (pool.length < 2) return;
@@ -152,14 +143,14 @@ export function DeathRoulette({ players, onClose, onExecute }: Props) {
                 </motion.p>
               ) : (
                 <motion.p key="idle" className="font-mono text-xs uppercase tracking-[0.25em] text-ash">
-                  {pool.length} người trên bàn cân
+                  {pool.length} người bằng phiếu
                 </motion.p>
               )}
             </AnimatePresence>
           </motion.div>
 
           <p className="mt-3 h-5 text-center font-mono text-[10px] uppercase tracking-[0.25em] text-ash">
-            {phase === "pick" && "Chạm để loại người không bị hòa phiếu"}
+            {phase === "pick" && "Người bị gọi tên sẽ lên giàn bào chữa"}
             {phase === "spinning" && (slowing ? "Chậm dần…" : "Tử thần đang chọn…")}
             {phase === "locked" && <span className="text-blood">Tử thần đã chọn</span>}
           </p>
@@ -168,19 +159,10 @@ export function DeathRoulette({ players, onClose, onExecute }: Props) {
         {/* Danh sách ứng viên */}
         <ul className="mt-4 flex-1 overflow-y-auto px-safe pb-40">
           {players.map((p) => {
-            const out = excluded.has(p.id);
             const hot = current?.id === p.id;
             return (
               <li key={p.id} className="border-t border-line/60 first:border-t-0">
-                <button
-                  type="button"
-                  onClick={() => toggle(p.id)}
-                  disabled={phase !== "pick"}
-                  aria-pressed={!out}
-                  className={`flex min-h-16 w-full items-center gap-3 text-left transition-[opacity,color] duration-100 ${
-                    out ? "opacity-25" : ""
-                  }`}
-                >
+                <div className="flex min-h-16 w-full items-center gap-3 text-left">
                   <span
                     className={`grid size-10 place-items-center rounded-full font-display text-lg uppercase transition-colors duration-75 ${
                       hot ? (phase === "locked" ? "bg-blood text-bone" : "bg-bone text-ink") : "bg-line text-bone"
@@ -189,11 +171,11 @@ export function DeathRoulette({ players, onClose, onExecute }: Props) {
                     {hot && phase === "locked" ? <Skull className="size-5" strokeWidth={1.75} /> : p.name.slice(0, 1)}
                   </span>
                   <span
-                    className={`flex-1 text-lg font-medium ${out ? "text-neutral-500 line-through" : hot ? "text-bone" : "text-bone/70"}`}
+                    className={`flex-1 text-lg font-medium ${hot ? "text-bone" : "text-bone/70"}`}
                   >
                     {p.name}
                   </span>
-                </button>
+                </div>
               </li>
             );
           })}
@@ -209,10 +191,10 @@ export function DeathRoulette({ players, onClose, onExecute }: Props) {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.6 }}
                   whileTap={{ scale: 0.97 }}
-                  onClick={() => onExecute(current)}
+                  onClick={() => onPicked(current)}
                   className="flex h-20 w-full items-center justify-between rounded-2xl bg-blood px-6 text-bone"
                 >
-                  <span className="truncate pt-[0.12em] font-display text-3xl uppercase leading-[1.15]">Thi hành · {current.name}</span>
+                  <span className="truncate pt-[0.12em] font-display text-3xl uppercase leading-[1.15]">Đưa {current.name} lên giàn</span>
                   <Skull className="size-7 shrink-0" strokeWidth={2} />
                 </motion.button>
               ) : (
@@ -220,10 +202,10 @@ export function DeathRoulette({ players, onClose, onExecute }: Props) {
                   type="button"
                   whileTap={{ scale: 0.97 }}
                   onClick={spin}
-                  disabled={phase !== "pick" || pool.length < 2}
+                  disabled={phase !== "pick"}
                   className="flex h-20 w-full items-center justify-center rounded-2xl bg-bone font-display text-4xl uppercase leading-none text-ink disabled:opacity-30"
                 >
-                  {phase === "spinning" ? "…" : pool.length < 2 ? "Cần ít nhất 2 người" : "Quay!"}
+                  {phase === "spinning" ? "…" : "Quay!"}
                 </motion.button>
               )}
             </div>

@@ -21,7 +21,7 @@ interface Props {
 
 export function RoleReveal({ player, onCancel, onDone }: Props) {
   const role = getRole(player.roleId);
-  const isWolf = role?.id === "WOLF";
+  const isWolf = role?.team === "WOLVES";
   const isSoundEnabled = useGameStore((s) => s.isSoundEnabled);
   const reduceMotion = useReducedMotion();
 
@@ -158,6 +158,11 @@ export function RoleReveal({ player, onCancel, onDone }: Props) {
                 >
                   {role?.name ?? "???"}
                 </h2>
+                {player.formerRoleId && (
+                  <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.2em] text-blood">
+                    Từng là {getRole(player.formerRoleId)?.name}, giờ đã hóa Sói
+                  </p>
+                )}
                 <p className="mt-6 max-w-[34ch] text-lg leading-relaxed text-bone/85">
                   {role?.description ?? "Không tìm thấy vai. Báo quản trò chia lại."}
                 </p>

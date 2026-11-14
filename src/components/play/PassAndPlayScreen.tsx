@@ -4,6 +4,8 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Moon } from "lucide-react";
 import { useGameStore } from "@/store/gameStore";
+import { countRoles } from "@/utils/balancer";
+import { DeckSummary } from "../DeckSummary";
 import { RoleReveal } from "./RoleReveal";
 
 const ease = [0.22, 1, 0.36, 1] as const;
@@ -76,6 +78,10 @@ export function PassAndPlayScreen() {
         <p className="mt-4 max-w-[32ch] text-base leading-relaxed text-ash">
           Đưa máy cho từng người. Chạm vào tên mình, lật bài, nhớ kỹ rồi giấu đi.
         </p>
+
+        <div className="mt-6">
+          <DeckSummary counts={countRoles(players)} label="Đọc to cho cả bàn · ván này có" size="sm" />
+        </div>
 
         <ul className="mt-8 grid grid-cols-2 gap-3">
           {players.map((p, i) => {

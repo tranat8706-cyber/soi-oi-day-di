@@ -11,13 +11,15 @@ interface Props {
   /** Có thì mỗi dòng (còn sống) thành nút chọn. */
   onSelect?: (player: Player) => void;
   selectedId?: string | null;
+  /** Chọn nhiều người cùng lúc (ví dụ: những người bằng phiếu). */
+  selectedIds?: string[];
   /** Lý do không chọn được (hiện dưới tên), hoặc null nếu chọn được. */
   disabledReason?: (player: Player) => string | null;
   /** Hiện tên vai cạnh mỗi người (màn của quản trò). */
   showRoles?: boolean;
   /** Đánh dấu người vừa chết đêm qua. */
-  freshDeadId?: string | null;
-  /** Ghi chú riêng cho người đã chết (ưu tiên hơn freshDeadId). */
+  freshDeadIds?: string[];
+  /** Ghi chú riêng cho người đã chết (ưu tiên hơn freshDeadIds). */
   deadNote?: (player: Player) => string | null;
   trailing?: (player: Player) => ReactNode;
 }
@@ -30,9 +32,10 @@ export function PlayerList({
   players,
   onSelect,
   selectedId,
+  selectedIds,
   disabledReason,
   showRoles,
-  freshDeadId,
+  freshDeadIds,
   deadNote,
   trailing,
 }: Props) {
@@ -44,10 +47,10 @@ export function PlayerList({
       {sorted.map((p, i) => {
         const dead = !p.isAlive;
         const reason = dead ? null : (disabledReason?.(p) ?? null);
-        const selected = !dead && selectedId === p.id;
+        const selected = !dead && (selectedId === p.id || !!selectedIds?.includes(p.id));
         const selectable = !!onSelect && !dead && !reason;
         const role = showRoles ? getRole(p.roleId) : null;
-        const note = dead ? (deadNote?.(p) ?? (freshDeadId === p.id ? "Chết đêm qua" : null)) : null;
+        const note = dead ? (deadNote?.(p) ?? (freshDeadIds?.includes(p.id) ? "Chết đêm qua" : null)) : null;
 
         const body = (
           <>
@@ -84,7 +87,10 @@ export function PlayerList({
               {(role || reason || note) && (
                 <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.18em] text-ash">
                   {role && (
-                    <span className={role.id === "WOLF" && !dead ? "text-blood" : undefined}>{role.name}</span>
+                    <span className={role.team === "WOLVES" && !dead ? "text-blood" : undefined}>
+                      {role.name}
+                      {p.formerRoleId && ` (từng là ${getRole(p.formerRoleId)?.name ?? "?"})`}
+                    </span>
                   )}
                   {role && (reason || note) && " · "}
                   {note ?? reason}

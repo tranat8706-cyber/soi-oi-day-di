@@ -10,6 +10,8 @@
   --color-blood-dim: #5a0d10;
   /* Màu phe Làng trên màn Recap. */
   --color-moss: #4f9d74;
+  /* Màu phe Cặp đôi (Thần tình yêu) trên màn Recap. */
+  --color-rose: #d94a8c;
 
   --font-display: var(--font-anton), "Arial Narrow", sans-serif;
   --font-sans: var(--font-be-vietnam), system-ui, sans-serif;

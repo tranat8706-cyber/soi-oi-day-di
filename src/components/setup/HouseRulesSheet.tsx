@@ -3,24 +3,47 @@
 import { useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
-import { useGameStore, type HouseRules } from "@/store/gameStore";
+import { useGameStore, type TieRule } from "@/store/gameStore";
 
 interface Props {
   open: boolean;
   onClose: () => void;
 }
 
-const RULES: { key: keyof HouseRules; title: string; hint: string }[] = [
+type BoolRule = "witchSeesVictim" | "bodyguardSelfProtect" | "revealDeadRoles" | "elderVillageKill";
+
+/** `def`: giá trị khi bản lưu cũ chưa có luật này. */
+const RULES: { key: BoolRule; title: string; hint: string; def: boolean }[] = [
   {
     key: "witchSeesVictim",
     title: "Phù thủy thấy nạn nhân",
-    hint: "Quản trò cho Phù thủy biết ai vừa bị Sói cắn trước khi dùng bình.",
+    hint: "Quản trò chỉ cho Phù thủy biết ai vừa bị Sói cắn. Tắt đi thì Phù thủy phải đoán mà cứu.",
+    def: true,
   },
   {
     key: "bodyguardSelfProtect",
     title: "Bảo vệ tự che mình",
     hint: "Bảo vệ được phép chọn chính mình trong đêm.",
+    def: true,
   },
+  {
+    key: "revealDeadRoles",
+    title: "Lật bài người chết",
+    hint: "Ai chết (đêm, bị treo, bị bắn) thì Quản trò công khai vai của họ cho cả bàn.",
+    def: false,
+  },
+  {
+    key: "elderVillageKill",
+    title: "Già làng nghiêm khắc",
+    hint: "Già làng chết vì phe Làng (bị treo, bị độc, bị Thợ săn bắn, bị cảm tử) thì cả làng mất phép. Tắt: chỉ khi bị treo.",
+    def: false,
+  },
+];
+
+const TIE_OPTIONS: { value: TieRule; label: string; hint: string }[] = [
+  { value: "ROULETTE", label: "Quay", hint: "Vòng quay tử thần chọn ngẫu nhiên 1 người lên giàn." },
+  { value: "REVOTE", label: "Bầu lại", hint: "Bầu lại chỉ giữa những người bằng phiếu. Vẫn hòa thì không treo." },
+  { value: "NONE", label: "Không treo", hint: "Hòa phiếu thì hôm đó không treo ai, đi ngủ luôn." },
 ];
 
 function Switch({ on }: { on: boolean }) {
@@ -92,11 +115,7 @@ export function HouseRulesSheet({ open, onClose }: Props) {
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", stiffness: 380, damping: 38 }}
-            drag="y"
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0, bottom: 0.6 }}
-            onDragEnd={(_, info) => (info.offset.y > 120 || info.velocity.y > 600) && onClose()}
-            className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-xl rounded-t-[28px] border-t border-line bg-ink-2 px-safe pb-safe"
+            className="fixed inset-x-0 bottom-0 z-40 mx-auto flex max-h-[90dvh] max-w-xl flex-col rounded-t-[28px] border-t border-line bg-ink-2 px-safe pb-safe"
           >
             <div className="mx-auto mt-3 h-1 w-10 rounded-full bg-line" />
             <div className="flex items-center justify-between pt-4">
@@ -116,16 +135,36 @@ export function HouseRulesSheet({ open, onClose }: Props) {
               </button>
             </div>
 
-            <div className="mt-4 pb-6">
-              {RULES.map((r) => (
-                <Row
-                  key={r.key}
-                  title={r.title}
-                  hint={r.hint}
-                  on={houseRules[r.key]}
-                  onToggle={() => setHouseRule(r.key, !houseRules[r.key])}
-                />
-              ))}
+            <div className="mt-4 min-h-0 overflow-y-auto pb-6">
+              {RULES.map((r) => {
+                const on = houseRules[r.key] ?? r.def;
+                return <Row key={r.key} title={r.title} hint={r.hint} on={on} onToggle={() => setHouseRule(r.key, !on)} />;
+              })}
+              <div className="border-b border-line py-4">
+                <span className="block text-lg font-medium text-bone">Khi hòa phiếu</span>
+                <div role="radiogroup" aria-label="Khi hòa phiếu" className="mt-3 grid grid-cols-3 gap-1 rounded-2xl border border-line p-1">
+                  {TIE_OPTIONS.map((o) => {
+                    const on = (houseRules.tieRule ?? "ROULETTE") === o.value;
+                    return (
+                      <button
+                        key={o.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={on}
+                        onClick={() => setHouseRule("tieRule", o.value)}
+                        className={`h-14 rounded-xl font-mono text-[11px] uppercase tracking-[0.15em] transition-colors ${
+                          on ? "bg-bone text-ink" : "text-ash active:text-bone"
+                        }`}
+                      >
+                        {o.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <span className="mt-2 block text-sm leading-snug text-ash">
+                  {TIE_OPTIONS.find((o) => o.value === (houseRules.tieRule ?? "ROULETTE"))?.hint}
+                </span>
+              </div>
               <Row
                 title="Âm thanh"
                 hint="Tiếng chuông, tiếng tru khi chuyển ngày đêm."

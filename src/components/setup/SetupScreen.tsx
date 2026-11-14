@@ -2,12 +2,16 @@
 
 import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Plus, SlidersHorizontal } from "lucide-react";
-import { MIN_PLAYERS, useGameStore } from "@/store/gameStore";
+import { ArrowRight, CircleHelp, Plus, SlidersHorizontal, Smartphone } from "lucide-react";
+import { MAX_PLAYERS, MIN_PLAYERS, useGameStore } from "@/store/gameStore";
 import { unlockAudio } from "@/utils/audio";
 import { track } from "@/utils/analytics";
 import { PlayerRow } from "./PlayerRow";
 import { HouseRulesSheet } from "./HouseRulesSheet";
+import { DeckEditor } from "./DeckEditor";
+import { Onboarding } from "./Onboarding";
+
+const QUICK_FILL = [6, 8, 10, 12];
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -19,6 +23,10 @@ export function SetupScreen() {
   const clearPlayers = useGameStore((s) => s.clearPlayers);
   const houseRules = useGameStore((s) => s.houseRules);
   const assignRoles = useGameStore((s) => s.assignRoles);
+  const fillPlayers = useGameStore((s) => s.fillPlayers);
+  const onboarded = useGameStore((s) => s.onboarded);
+  const setOnboarded = useGameStore((s) => s.setOnboarded);
+  const customDeck = useGameStore((s) => s.customDeck);
 
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +46,7 @@ export function SetupScreen() {
       track("player_added", { count: players.length + 1 });
       requestAnimationFrame(() => addRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
     } else {
-      setError(`“${name}” đã ngồi ở bàn rồi.`);
+      setError(players.length >= MAX_PLAYERS ? `Tối đa ${MAX_PLAYERS} người một bàn.` : `“${name}” đã ngồi ở bàn rồi.`);
     }
     addRef.current?.focus();
   };
@@ -60,6 +68,7 @@ export function SetupScreen() {
       players: players.length,
       sessionTitle: sessionTitle || null,
       houseRules,
+      customDeck,
       withAvatars: players.filter((p) => p.avatarBase64).length,
     });
     assignRoles();
@@ -72,14 +81,24 @@ export function SetupScreen() {
         <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">
           Quản trò · Offline
         </p>
-        <button
-          type="button"
-          onClick={() => setRulesOpen(true)}
-          aria-label="Luật nhà"
-          className="-mr-4 grid size-16 place-items-center text-ash transition-colors active:text-bone"
-        >
-          <SlidersHorizontal className="size-6" strokeWidth={1.5} />
-        </button>
+        <div className="-mr-4 flex">
+          <button
+            type="button"
+            onClick={() => setOnboarded(false)}
+            aria-label="Xem hướng dẫn"
+            className="grid size-16 place-items-center text-ash transition-colors active:text-bone"
+          >
+            <CircleHelp className="size-6" strokeWidth={1.5} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setRulesOpen(true)}
+            aria-label="Luật nhà"
+            className="grid size-16 place-items-center text-ash transition-colors active:text-bone"
+          >
+            <SlidersHorizontal className="size-6" strokeWidth={1.5} />
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 px-safe pb-44">
@@ -111,31 +130,31 @@ export function SetupScreen() {
           Một chiếc điện thoại. Một bàn người. Không ai được tin ai.
         </motion.p>
 
-        {/* Tên ván */}
-        <section className="mt-14">
-          <label htmlFor="session-title" className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">
-            01 — Tên ván
-          </label>
-          <input
-            id="session-title"
-            value={sessionTitle}
-            onChange={(e) => setSessionTitle(e.target.value)}
-            placeholder="Đêm đẫm máu"
-            autoComplete="off"
-            enterKeyHint="next"
-            onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && addRef.current?.focus()}
-            className="mt-2 h-16 w-full border-b border-line bg-transparent text-2xl font-medium text-bone outline-none placeholder:text-ash/40 focus:border-bone"
-          />
-        </section>
+        {/* Ai cầm máy */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.8, duration: 0.6, ease }}
+          className="mt-10 flex gap-4 rounded-2xl border border-line bg-ink-2 px-4 py-4"
+        >
+          <Smartphone className="mt-0.5 size-6 shrink-0 text-blood" strokeWidth={1.5} />
+          <p className="text-sm leading-relaxed text-bone/80">
+            <span className="font-semibold text-bone">Bạn là Quản trò.</span> Bạn cầm máy dẫn truyện, không nhận bài nên
+            không cần nhập tên mình. Chỉ nhập tên những người chơi.
+          </p>
+        </motion.div>
 
         {/* Người chơi */}
         <section className="mt-12">
           <div className="flex items-end justify-between">
-            <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">02 — Người chơi</span>
+            <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">01 — Người chơi</span>
             <span className="font-display text-5xl leading-none tabular-nums text-bone">
               {String(players.length).padStart(2, "0")}
             </span>
           </div>
+          <p className="mt-2 text-sm leading-snug text-ash">
+            Gõ tên từng người rồi bấm <span className="text-bone">Enter</span>. Cần ít nhất {MIN_PLAYERS} người.
+          </p>
 
           <ul className="mt-3 border-t border-line">
             <AnimatePresence initial={false}>
@@ -195,7 +214,11 @@ export function SetupScreen() {
                 </motion.p>
               ) : (
                 <motion.p key="hint" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm text-ash">
-                  {players.length === 0 ? "Chưa ai ngồi vào bàn." : "Danh sách được nhớ cho ván sau."}
+                  {players.length === 0
+                    ? "Chưa ai ngồi vào bàn."
+                    : missing
+                      ? `Thêm ${missing} người nữa là chơi được.`
+                      : "Chạm vào tên để sửa, vào tròn tròn để chụp ảnh."}
                 </motion.p>
               )}
             </AnimatePresence>
@@ -211,6 +234,53 @@ export function SetupScreen() {
               </button>
             )}
           </div>
+
+          {players.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-line px-4 py-4">
+              <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-ash">Lười gõ? Thêm nhanh</p>
+              <div className="mt-3 grid grid-cols-4 gap-2">
+                {QUICK_FILL.map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => fillPlayers(k)}
+                    className="flex h-16 flex-col items-center justify-center rounded-xl border border-line text-bone active:bg-ink-2"
+                  >
+                    <span className="font-display text-2xl leading-none">{k}</span>
+                    <span className="mt-1 font-mono text-[9px] uppercase tracking-[0.15em] text-ash">người</span>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-3 text-xs leading-snug text-ash">Tên tạm “Người 1, Người 2…”, chạm vào để đổi lại sau.</p>
+            </div>
+          )}
+        </section>
+
+        {/* Bộ bài */}
+        <section className="mt-12">
+          <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">02 — Bộ bài</span>
+          <p className="mt-2 text-sm leading-snug text-ash">
+            Ván này gồm những vai nào. Quản trò đọc to cho cả bàn biết trước khi chia.
+          </p>
+          <DeckEditor />
+        </section>
+
+        {/* Tên ván */}
+        <section className="mt-12">
+          <label htmlFor="session-title" className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">
+            03 — Tên ván <span className="text-ash/50">· không bắt buộc</span>
+          </label>
+          <input
+            id="session-title"
+            value={sessionTitle}
+            onChange={(e) => setSessionTitle(e.target.value)}
+            placeholder="Đêm đẫm máu"
+            autoComplete="off"
+            enterKeyHint="done"
+            onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && e.currentTarget.blur()}
+            className="mt-2 h-16 w-full border-b border-line bg-transparent text-2xl font-medium text-bone outline-none placeholder:text-ash/40 focus:border-bone"
+          />
+          <p className="mt-2 text-sm text-ash">In lên ảnh tổng kết cuối ván để khoe lên Story.</p>
         </section>
       </main>
 
@@ -253,6 +323,8 @@ export function SetupScreen() {
       </div>
 
       <HouseRulesSheet open={rulesOpen} onClose={() => setRulesOpen(false)} />
+
+      <AnimatePresence>{!onboarded && <Onboarding key="onboarding" onDone={() => setOnboarded(true)} />}</AnimatePresence>
     </div>
   );
 }
