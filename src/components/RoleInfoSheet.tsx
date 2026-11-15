@@ -29,7 +29,7 @@ export function RoleInfoSheet({ id, onClose }: { id: RoleId | null; onClose: () 
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 z-40 bg-black/75 backdrop-blur-[2px]"
+            className="fixed inset-0 z-[70] bg-black/75 backdrop-blur-[2px]"
           />
           <motion.div
             key="role-sheet"
@@ -40,7 +40,7 @@ export function RoleInfoSheet({ id, onClose }: { id: RoleId | null; onClose: () 
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", stiffness: 380, damping: 38 }}
-            className="fixed inset-x-0 bottom-0 z-40 mx-auto max-h-[88dvh] max-w-xl overflow-y-auto rounded-t-[28px] border-t border-line bg-ink-2 px-safe pb-safe"
+            className="fixed inset-x-0 bottom-0 z-[70] mx-auto max-h-[88dvh] max-w-xl overflow-y-auto rounded-t-[28px] border-t border-line bg-ink-2 px-safe pb-safe"
           >
             <div className="mx-auto mt-3 h-1 w-10 rounded-full bg-line" />
             <div className="flex items-start justify-between gap-3 pt-4">

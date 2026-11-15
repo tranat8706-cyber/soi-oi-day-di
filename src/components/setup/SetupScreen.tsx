@@ -14,6 +14,7 @@ import { HouseRulesList, HouseRulesSheet } from "./HouseRulesSheet";
 import { DeckEditor, useCurrentDeck } from "./DeckEditor";
 import { BalanceMeter } from "./BalanceMeter";
 import { Onboarding } from "./Onboarding";
+import { Handbook } from "../Handbook";
 import Image from "next/image";
 import { Lock } from "lucide-react";
 import { THEME_ORDER, THEMES, PRO_THEMES_UNLOCKED, activeTheme, cardSrc } from "@/constants/themes";
@@ -70,6 +71,7 @@ export function SetupScreen() {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [bookOpen, setBookOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [lopsidedOpen, setLopsidedOpen] = useState(false);
   const addRef = useRef<HTMLInputElement>(null);
@@ -163,8 +165,8 @@ export function SetupScreen() {
         <div className="-mr-4 flex">
           <button
             type="button"
-            onClick={() => setOnboarded(false)}
-            aria-label="Xem hướng dẫn"
+            onClick={() => setBookOpen(true)}
+            aria-label="Sổ tay luật chơi và các vai"
             className="grid size-16 place-items-center text-ash transition-colors active:text-bone"
           >
             <CircleHelp className="size-6" strokeWidth={1.5} />
@@ -469,6 +471,14 @@ export function SetupScreen() {
       </div>
 
       <HouseRulesSheet open={rulesOpen} onClose={() => setRulesOpen(false)} />
+      <Handbook
+        open={bookOpen}
+        onClose={() => setBookOpen(false)}
+        onReplayGuide={() => {
+          setBookOpen(false);
+          setOnboarded(false);
+        }}
+      />
 
       {/* Hỏi lại khi bộ tự chọn lệch nặng */}
       <AnimatePresence>

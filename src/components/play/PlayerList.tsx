@@ -1,5 +1,6 @@
 "use client";
 
+import { FolkAvatar, avatarSeedOf } from "@/components/FolkAvatar";
 import type { ReactNode } from "react";
 import { motion } from "framer-motion";
 import { Bomb, Check, Eye, FlaskConical, Heart, House, PawPrint, Shield, Skull, Sparkles, type LucideIcon } from "lucide-react";
@@ -116,14 +117,14 @@ export function PlayerList({
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={p.avatarBase64} alt="" className="size-full object-cover grayscale" />
               ) : (
-                p.name.slice(0, 1)
+                <FolkAvatar seed={avatarSeedOf(p)} className={dead ? "grayscale" : ""} />
               )}
               {dead && (
                 <span className="absolute inset-0 grid place-items-center bg-ink/70">
                   <Skull className="size-5 text-neutral-400" strokeWidth={1.5} />
                 </span>
               )}
-              {selected && p.avatarBase64 && (
+              {selected && (
                 <span className="absolute inset-0 grid place-items-center bg-blood/70">
                   <Check className="size-6 text-bone" strokeWidth={2.5} />
                 </span>
@@ -158,7 +159,6 @@ export function PlayerList({
               )}
             </span>
             {trailing?.(p)}
-            {selected && !p.avatarBase64 && <Check className="size-6 shrink-0 text-blood" strokeWidth={2.5} />}
             {selected && selectFx && <SelectMark key={`${p.id}-${selectFx}`} fx={selectFx} />}
           </>
         );

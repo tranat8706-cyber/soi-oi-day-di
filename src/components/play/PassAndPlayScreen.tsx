@@ -1,5 +1,6 @@
 "use client";
 
+import { FolkAvatar, avatarSeedOf } from "@/components/FolkAvatar";
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, Check, Moon } from "lucide-react";
@@ -113,7 +114,7 @@ export function PassAndPlayScreen() {
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={p.avatarBase64} alt="" className="size-full object-cover grayscale" />
                     ) : (
-                      p.name.slice(0, 1)
+                      <FolkAvatar seed={avatarSeedOf(p)} />
                     )}
                     {done && (
                       <span className="absolute inset-0 grid place-items-center bg-ink/70">

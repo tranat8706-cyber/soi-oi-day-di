@@ -6,6 +6,7 @@ import { Camera, LoaderCircle, X } from "lucide-react";
 import { useGameStore, type Player } from "@/store/gameStore";
 import { compressAvatar } from "@/utils/imageCompress";
 import { track } from "@/utils/analytics";
+import { FolkAvatar, avatarSeedOf } from "@/components/FolkAvatar";
 
 interface Props {
   player: Player;
@@ -16,6 +17,7 @@ export function PlayerRow({ player, index }: Props) {
   const renamePlayer = useGameStore((s) => s.renamePlayer);
   const removePlayer = useGameStore((s) => s.removePlayer);
   const setPlayerAvatar = useGameStore((s) => s.setPlayerAvatar);
+  const rerollAvatar = useGameStore((s) => s.rerollAvatar);
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
 
@@ -58,24 +60,34 @@ export function PlayerRow({ player, index }: Props) {
         {String(index + 1).padStart(2, "0")}
       </span>
 
-      <button
-        type="button"
-        onClick={() => fileRef.current?.click()}
-        aria-label={player.avatarBase64 ? `Chụp lại ảnh cho ${player.name}` : `Chụp ảnh cho ${player.name}`}
-        className="relative grid size-16 shrink-0 place-items-center overflow-hidden rounded-full border border-line bg-ink-2 text-ash transition-colors active:border-bone"
-      >
-        {player.avatarBase64 ? (
-          // eslint-disable-next-line @next/next/no-img-element -- data URL, next/image không cần thiết
-          <img src={player.avatarBase64} alt="" className="size-full object-cover grayscale-[35%]" />
-        ) : (
-          <Camera className="size-5" strokeWidth={1.5} />
-        )}
-        {busy && (
-          <span className="absolute inset-0 grid place-items-center bg-ink/70">
-            <LoaderCircle className="size-5 animate-spin text-bone" />
-          </span>
-        )}
-      </button>
+      <span className="relative shrink-0">
+        <button
+          type="button"
+          onClick={() => (player.avatarBase64 ? fileRef.current?.click() : rerollAvatar(player.id))}
+          aria-label={player.avatarBase64 ? `Chụp lại ảnh cho ${player.name}` : `Đổi avatar ngẫu nhiên cho ${player.name}`}
+          className="relative grid size-16 place-items-center overflow-hidden rounded-full border border-line bg-ink-2 transition-colors active:scale-95 active:border-bone"
+        >
+          {player.avatarBase64 ? (
+            // eslint-disable-next-line @next/next/no-img-element -- data URL, next/image không cần thiết
+            <img src={player.avatarBase64} alt="" className="size-full object-cover grayscale-[35%]" />
+          ) : (
+            <FolkAvatar seed={avatarSeedOf(player)} />
+          )}
+          {busy && (
+            <span className="absolute inset-0 grid place-items-center bg-ink/70">
+              <LoaderCircle className="size-5 animate-spin text-bone" />
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => (player.avatarBase64 ? setPlayerAvatar(player.id, undefined) : fileRef.current?.click())}
+          aria-label={player.avatarBase64 ? `Bỏ ảnh, dùng avatar pixel cho ${player.name}` : `Chụp ảnh cho ${player.name}`}
+          className="absolute -bottom-1 -right-1 grid size-7 place-items-center rounded-full border border-line bg-ink text-bone active:bg-ink-2"
+        >
+          {player.avatarBase64 ? <X className="size-3.5" strokeWidth={2.5} /> : <Camera className="size-3.5" strokeWidth={2} />}
+        </button>
+      </span>
       <input
         ref={fileRef}
         type="file"

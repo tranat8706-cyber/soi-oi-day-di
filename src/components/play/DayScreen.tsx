@@ -1,5 +1,6 @@
 "use client";
 
+import { FolkAvatar, avatarSeedOf } from "@/components/FolkAvatar";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Crosshair, Dices, Gavel, Moon, Skull, Timer } from "lucide-react";
@@ -740,7 +741,7 @@ function TrialPanel({
             // eslint-disable-next-line @next/next/no-img-element
             <img src={accused.avatarBase64} alt="" className="size-full object-cover grayscale" />
           ) : (
-            accused.name.slice(0, 1)
+            <FolkAvatar seed={avatarSeedOf(accused)} />
           )}
         </span>
         <h1 className="min-w-0 break-words pt-[0.1em] font-display text-[clamp(3rem,15vw,5.5rem)] uppercase leading-[1.18] text-bone">

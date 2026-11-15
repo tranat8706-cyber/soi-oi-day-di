@@ -144,7 +144,7 @@ export const activeSkill = (level: SkillLevel | undefined): SkillLevel =>
   level === "PRO" && !PRO_UNLOCKED ? "MIXED" : (level ?? "MIXED");
 
 /** Vai cho bàn có người mới: phép đơn giản, ai nghe một lần cũng hiểu. */
-const NEWBIE_OK = new Set<SpecialRoleId>(["GUARD", "WITCH", "HUNTER", "IDIOT", "ELDER", "LYCAN", "WOLF_CUB"]);
+export const NEWBIE_OK = new Set<SpecialRoleId>(["GUARD", "WITCH", "HUNTER", "IDIOT", "ELDER", "LYCAN", "WOLF_CUB"]);
 
 /** Ngưỡng số người tối thiểu theo trình độ (trùm thì vai khó xuất hiện từ bàn nhỏ). */
 const autoMin = (id: SpecialRoleId, level: SkillLevel) => {

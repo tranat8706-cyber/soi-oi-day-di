@@ -7,6 +7,7 @@ import { RotateCcw, Settings2, ThumbsDown, ThumbsUp } from "lucide-react";
 import { getRole } from "@/constants/roles";
 import { useGameStore, type Player, type Winner } from "@/store/gameStore";
 import { StepBack } from "./StepBack";
+import { FolkAvatar, avatarSeedOf } from "@/components/FolkAvatar";
 import { ShareStory } from "./ShareStory";
 import { useArt } from "@/hooks/useArt";
 import type { ArtName } from "@/constants/themes";
@@ -251,12 +252,7 @@ function Polaroid({
               className="size-full object-cover contrast-125 grayscale sepia-[0.25]"
             />
           ) : (
-            <span
-              className="grid size-full place-items-center font-display uppercase text-bone/80"
-              style={{ fontSize: `${38 * unit}cqw` }}
-            >
-              {player.name.slice(0, 1)}
-            </span>
+            <FolkAvatar seed={avatarSeedOf(player)} className="sepia-[0.15]" />
           )}
         </motion.div>
         <div aria-hidden className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,transparent_35%,rgba(0,0,0,0.65)_100%)]" />

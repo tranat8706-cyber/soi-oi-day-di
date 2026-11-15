@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Eye, Gavel, Lock, Moon, Smartphone, Users } from "lucide-react";
+import { ArrowRight, BookOpen, Eye, Gavel, Lock, Moon, Smartphone, Users } from "lucide-react";
+import { Handbook } from "../Handbook";
 import { MAX_PLAYERS, MIN_PLAYERS, useGameStore } from "@/store/gameStore";
 import { activeSkill, SKILL_LEVELS, type SkillLevel } from "@/utils/balancer";
 import { PRO_UNLOCKED } from "@/constants/pro";
@@ -64,6 +65,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   const setSetupStep = useGameStore((st) => st.setSetupStep);
 
   const [phase, setPhase] = useState<"guide" | "count" | "names" | "skill">("guide");
+  const [bookOpen, setBookOpen] = useState(false);
   // Tên đã có (bỏ tên tạm) để người cũ khỏi gõ lại.
   const [names, setNames] = useState<string[]>(() => players.map((p) => (/^Người \d+$/.test(p.name) ? "" : p.name)));
   const nameRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -176,6 +178,13 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
         </motion.div>
 
         <div className="px-safe pb-safe">
+          <button
+            type="button"
+            onClick={() => setBookOpen(true)}
+            className="mb-3 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border border-line font-mono text-[11px] uppercase tracking-[0.18em] text-bone active:bg-ink-2"
+          >
+            <BookOpen className="size-4" strokeWidth={1.75} /> Lần đầu chơi? Xem luật &amp; các vai
+          </button>
           <div className="flex gap-3 pb-4">
             {i > 0 && (
               <button
@@ -375,6 +384,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
           </>
         )}
       </div>
+      <Handbook open={bookOpen} onClose={() => setBookOpen(false)} />
     </motion.div>
   );
 }

@@ -25,6 +25,8 @@ export interface Player {
   roleId: string | null;
   isAlive: boolean;
   avatarBase64?: string;
+  /** Seed avatar pixel (chưa có thì dùng id). */
+  avatarSeed?: string;
   /** Lá bài gốc nếu bị hóa Sói giữa ván (Sói nguyền, Đứa trẻ hoang). */
   formerRoleId?: string;
 }
@@ -136,6 +138,8 @@ interface GameStore {
   autoSeed: number;
   /** Đổi sang một bộ tự cân bằng khác. */
   rerollAutoDeck: () => void;
+  /** Đổi avatar pixel ngẫu nhiên của một người. */
+  rerollAvatar: (id: string) => void;
 
   setSessionTitle: (title: string) => void;
   /** Trả về false nếu tên rỗng hoặc trùng. */
@@ -487,6 +491,8 @@ export const useGameStore = create<GameStore>()(
       setSetupStep: (setupStep) => set({ setupStep }),
       autoSeed: 1,
       rerollAutoDeck: () => set({ autoSeed: Math.floor(Math.random() * 1_000_000_000) }),
+      rerollAvatar: (id) =>
+        set((s) => ({ players: s.players.map((p) => (p.id === id ? { ...p, avatarSeed: Math.random().toString(36).slice(2) } : p)) })),
       setSessionTitle: (sessionTitle) => set({ sessionTitle }),
 
       addPlayer: (raw) => {
