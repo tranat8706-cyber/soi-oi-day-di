@@ -112,7 +112,7 @@ export function DeathRoulette({ players, onClose, onPicked }: Props) {
 
         {/* Khe tên */}
         <div className="px-safe">
-          <h2 className="font-display text-5xl uppercase leading-none text-bone">
+          <h2 className="font-display text-5xl uppercase leading-[1.15] text-bone">
             Vòng quay
             <br />
             tử thần<span className="text-blood">.</span>
@@ -203,7 +203,7 @@ export function DeathRoulette({ players, onClose, onPicked }: Props) {
                   whileTap={{ scale: 0.97 }}
                   onClick={spin}
                   disabled={phase !== "pick"}
-                  className="flex h-20 w-full items-center justify-center rounded-2xl bg-bone font-display text-4xl uppercase leading-none text-ink disabled:opacity-30"
+                  className="flex h-20 w-full items-center justify-center rounded-2xl bg-bone font-display text-4xl uppercase leading-[1.15] text-ink disabled:opacity-30"
                 >
                   {phase === "spinning" ? "…" : "Quay!"}
                 </motion.button>

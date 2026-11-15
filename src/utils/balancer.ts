@@ -111,12 +111,32 @@ const AUTO_MIN: Partial<Record<SpecialRoleId, number>> = {
   WHITE_WOLF: 10,
 };
 
+/** Trình độ của nhóm: quyết định bộ tự cân bằng dùng vai dễ hay vai khó. */
+export type SkillLevel = "NEWBIE" | "MIXED" | "PRO";
+
+export const SKILL_LEVELS: { id: SkillLevel; label: string; hint: string }[] = [
+  { id: "NEWBIE", label: "Có người mới", hint: "Chỉ dùng vai dễ hiểu, ít luật lắt léo. Ván đầu tiên nên chọn cái này." },
+  { id: "MIXED", label: "Đều biết chơi", hint: "Trộn vai quen với vài vai lạ, bàn càng đông càng nhiều vai lạ." },
+  { id: "PRO", label: "Trùm ma sói", hint: "Dồn vai khó, ít Dân thường, Sói đặc biệt xuất hiện nhiều. Cãi nhau mệt nghỉ." },
+];
+
+/** Vai cho bàn có người mới: phép đơn giản, ai nghe một lần cũng hiểu. */
+const NEWBIE_OK = new Set<SpecialRoleId>(["GUARD", "WITCH", "HUNTER", "IDIOT", "ELDER", "LYCAN", "WOLF_CUB"]);
+
+/** Ngưỡng số người tối thiểu theo trình độ (trùm thì vai khó xuất hiện từ bàn nhỏ). */
+const autoMin = (id: SpecialRoleId, level: SkillLevel) => {
+  const base = AUTO_MIN[id] ?? 0;
+  if (level === "PRO") return Math.min(base, id === "WHITE_WOLF" ? 8 : 5);
+  if (level === "NEWBIE") return NEWBIE_OK.has(id) ? base + (id === "WOLF_CUB" ? 2 : 0) : Infinity;
+  return base;
+};
+
 /** Vai "quen mặt"; bộ tự cân bằng ưu tiên bộ có nhiều vai ngoài nhóm này cho ván mới lạ. */
 const BASIC = new Set<RoleId>(["WOLF", "VILLAGER", "SEER", "GUARD", "WITCH", "HUNTER"]);
 const VILLAGE_POOL: SpecialRoleId[] = ["GUARD", "WITCH", "HUNTER", "ELDER", "IDIOT", "FOX", "CUPID", "LYCAN", "KAMIKAZE", "WILD_CHILD", "HARLOT"];
 const WOLF_POOL: SpecialRoleId[] = ["WOLF_CUB", "CURSED_WOLF", "WOLF_SEER", "WHITE_WOLF"];
 
-function randomDeck(n: number, rnd: () => number): DeckConfig {
+function randomDeck(n: number, rnd: () => number, level: SkillLevel): DeckConfig {
   const cap = maxWolves(n);
   const base = Math.min(cap, Math.max(1, Math.round(n * 0.28)));
   const jitter = rnd() < 0.2 ? (rnd() < 0.5 ? -1 : 1) : 0;
@@ -126,20 +146,23 @@ function randomDeck(n: number, rnd: () => number): DeckConfig {
   const take = <T>(arr: T[]) => arr.splice(Math.floor(rnd() * arr.length), 1)[0];
 
   // Đổi vài Sói thường thành Sói đặc biệt (luôn giữ ít nhất 1 Sói thường).
-  const wolfPool = WOLF_POOL.filter((id) => n >= (AUTO_MIN[id] ?? 0) && (id !== "WHITE_WOLF" || wolves >= 3));
-  const wolfSpecials = wolves >= 2 && wolfPool.length ? (rnd() < 0.85 ? 1 : 0) + (n >= 11 && wolves >= 3 && rnd() < 0.6 ? 1 : 0) : 0;
-  for (let i = 0; i < wolfSpecials && wolfPool.length; i++) {
+  const wolfPool = WOLF_POOL.filter((id) => n >= autoMin(id, level) && (id !== "WHITE_WOLF" || wolves >= 3));
+  const firstOdds = level === "NEWBIE" ? 0.4 : level === "PRO" ? 1 : 0.85;
+  const secondOk = level === "PRO" ? n >= 8 && wolves >= 2 && rnd() < 0.8 : level === "MIXED" && n >= 11 && wolves >= 3 && rnd() < 0.6;
+  const wolfSpecials = wolves >= 2 && wolfPool.length ? (rnd() < firstOdds ? 1 : 0) + (secondOk ? 1 : 0) : 0;
+  for (let i = 0; i < wolfSpecials && wolfPool.length && deck.WOLF > 1; i++) {
     deck[take(wolfPool)] = 1;
     deck.WOLF -= 1;
   }
 
   // Phe Làng: luôn có Tiên tri, giữ khoảng 30% Dân thường cho dễ giấu mình.
   const villageSlots = n - wolves;
-  const keepVillagers = Math.max(1, Math.round(villageSlots * 0.3));
+  const villagerShare = level === "NEWBIE" ? 0.45 : level === "PRO" ? 0.15 : 0.3;
+  const keepVillagers = Math.max(1, Math.round(villageSlots * villagerShare));
   const maxSpecials = villageSlots - keepVillagers;
   // Số vai phép dao động để bộ tìm kiếm có chỗ cân lại.
   const specials = Math.ceil(maxSpecials / 2) + Math.floor(rnd() * (maxSpecials - Math.ceil(maxSpecials / 2) + 1));
-  const pool = VILLAGE_POOL.filter((id) => n >= (AUTO_MIN[id] ?? 0));
+  const pool = VILLAGE_POOL.filter((id) => n >= autoMin(id, level));
   deck.SEER = 1;
   for (let i = 1; i < specials && pool.length; i++) deck[take(pool)] = 1;
   return deck;
@@ -150,18 +173,19 @@ function randomDeck(n: number, rnd: () => number): DeckConfig {
  * giữ những bộ có điểm gần cân bằng nhất rồi chọn ngẫu nhiên một bộ trong đó cho đa dạng.
  * `seed` cố định thì bộ bài cố định.
  */
-export function autoDeck(n: number, seed = 1): DeckConfig {
+export function autoDeck(n: number, seed = 1, level: SkillLevel = "MIXED"): DeckConfig {
   const rnd = mulberry32(seed * 7919 + n);
   const TARGET = 1; // hơi nghiêng về Làng một chút: bàn mới chơi dễ vui hơn
   const scored = Array.from({ length: 240 }, () => {
-    const deck = randomDeck(n, rnd);
+    const deck = randomDeck(n, rnd, level);
     return { deck, gap: Math.abs(balanceScore(resolveCounts(n, deck)) - TARGET) };
   });
   const best = Math.min(...scored.map((x) => x.gap));
   const good = scored.filter((x) => x.gap <= best + 1.5);
   // Bộ càng nhiều vai lạ càng dễ được chọn (vẫn ngẫu nhiên để mỗi ván một khác).
   const exotic = (d: DeckConfig) => SPECIAL_ROLES.filter((id) => (d[id] ?? 0) > 0 && !BASIC.has(id)).length;
-  const weights = good.map((x) => 1 + exotic(x.deck) * 2);
+  const pull = level === "NEWBIE" ? 0 : level === "PRO" ? 6 : 2;
+  const weights = good.map((x) => 1 + exotic(x.deck) * pull);
   let r = rnd() * weights.reduce((a, b) => a + b, 0);
   let pick = good[good.length - 1];
   for (let i = 0; i < good.length; i++) {
@@ -172,7 +196,7 @@ export function autoDeck(n: number, seed = 1): DeckConfig {
     }
   }
   // Tinh chỉnh thêm vài lá nếu bộ tốt nhất vẫn còn lệch (bàn rất đông ít lựa chọn hơn).
-  return rebalance(n, pick.deck, false);
+  return rebalance(n, pick.deck, false, (id) => id === "WOLF" || n >= autoMin(id as SpecialRoleId, level));
 }
 
 const configOf = (c: DeckCounts): DeckConfig => {
@@ -185,7 +209,12 @@ const configOf = (c: DeckCounts): DeckConfig => {
  * "Cân bằng giúp": chỉnh từng bước nhỏ (thêm/bớt 1 lá) cho tới khi gần cân bằng,
  * ưu tiên giữ những vai khách đã chọn.
  */
-export function rebalance(n: number, start: DeckConfig, keepChosen = true): DeckConfig {
+export function rebalance(
+  n: number,
+  start: DeckConfig,
+  keepChosen = true,
+  allowed: (id: keyof DeckConfig) => boolean = () => true,
+): DeckConfig {
   const TARGET = 1;
   const chosen = new Set(keepChosen ? SPECIAL_ROLES.filter((id) => (start[id] ?? 0) > 0) : []);
   let cur = configOf(resolveCounts(n, start));
@@ -199,6 +228,7 @@ export function rebalance(n: number, start: DeckConfig, keepChosen = true): Deck
       for (const delta of [1, -1]) {
         const value = (cur[id] ?? 0) + delta;
         if (value < (id === "WOLF" ? 1 : 0) || (id !== "WOLF" && value > 1)) continue;
+        if (delta > 0 && !allowed(id)) continue;
         const next = { ...cur, [id]: value };
         const counts = resolveCounts(n, next);
         if (counts[id] !== value) continue; // bị kẹp lại (hết chỗ, quá số Sói) thì bỏ
@@ -223,8 +253,8 @@ export function rebalance(n: number, start: DeckConfig, keepChosen = true): Deck
  * cho hợp lệ (số người thay đổi sau khi chỉnh thì không bị vỡ).
  * Tổng bầy Sói (kể cả Sói đặc biệt) luôn ít hơn nửa bàn.
  */
-export function resolveDeck(n: number, custom: DeckConfig | null, seed = 1): DeckCounts {
-  return resolveCounts(n, custom ?? autoDeck(n, seed));
+export function resolveDeck(n: number, custom: DeckConfig | null, seed = 1, level: SkillLevel = "MIXED"): DeckCounts {
+  return resolveCounts(n, custom ?? autoDeck(n, seed, level));
 }
 
 function resolveCounts(n: number, base: DeckConfig): DeckCounts {
@@ -246,9 +276,9 @@ function resolveCounts(n: number, base: DeckConfig): DeckCounts {
   return out;
 }
 
-export function buildDeck(n: number, custom: DeckConfig | null = null, seed = 1): RoleId[] {
+export function buildDeck(n: number, custom: DeckConfig | null = null, seed = 1, level: SkillLevel = "MIXED"): RoleId[] {
   if (n <= 0) return [];
-  const counts = resolveDeck(n, custom, seed);
+  const counts = resolveDeck(n, custom, seed, level);
   return (Object.keys(counts) as RoleId[]).flatMap((id) => Array.from({ length: counts[id] }, () => id));
 }
 
@@ -270,7 +300,8 @@ export function assignRoles<P extends { roleId: string | null }>(
   players: readonly P[],
   custom: DeckConfig | null = null,
   seed = 1,
+  level: SkillLevel = "MIXED",
 ): P[] {
-  const deck = shuffle(buildDeck(players.length, custom, seed));
+  const deck = shuffle(buildDeck(players.length, custom, seed, level));
   return players.map((p, i) => ({ ...p, roleId: deck[i] }));
 }

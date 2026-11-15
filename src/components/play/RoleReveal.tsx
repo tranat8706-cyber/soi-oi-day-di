@@ -6,13 +6,15 @@ import { EyeOff } from "lucide-react";
 import type { Player } from "@/store/gameStore";
 import { useGameStore } from "@/store/gameStore";
 import Image from "next/image";
-import { cardImage, getRole } from "@/constants/roles";
+import { getRole } from "@/constants/roles";
+import { ROLE_QUIPS } from "@/constants/quips";
+import { useArt } from "@/hooks/useArt";
 import { playThud } from "@/utils/audio";
 
 const ease = [0.22, 1, 0.36, 1] as const;
 const BLOOD_FLASH = "#991B1B";
 /** Khoá nút giấu bài một nhịp sau khi lật, tránh chạm đúp lật xong giấu luôn. */
-const HIDE_LOCK_MS = 700;
+const HIDE_LOCK_MS = 1200;
 
 interface Props {
   player: Player;
@@ -89,21 +91,10 @@ const WOLF_FX: Record<string, WolfFx> = {
   },
 };
 
-/** Lời "an ủi" cho Dân làng. */
-const VILLAGER_TROLL = [
-  "Chúc mừng, bạn đã trúng giải… không có gì.",
-  "Phép thuật của bạn: hít thở. Hãy tận dụng tối đa.",
-  "Sói cũng chẳng thèm cắn bạn đâu, đừng lo.",
-  "Bạn là xương sống của làng. Loại xương dễ gãy nhất.",
-  "Không phép, không bình, không súng. Chỉ có tấm lòng.",
-  "Nhiệm vụ: sống sót. Kỹ năng: cầu nguyện.",
-  "Đêm ngủ ngon nhé. Có khi là giấc cuối đấy.",
-  "Bạn không vô dụng đâu. Bạn có một lá phiếu. Một.",
-];
-
 export function RoleReveal({ player, onCancel, onDone }: Props) {
   const role = getRole(player.roleId);
-  const card = cardImage(player.roleId);
+  const { card: cardOf, art } = useArt();
+  const card = cardOf(player.roleId);
   const isWolf = role?.team === "WOLVES";
   const isSoundEnabled = useGameStore((s) => s.isSoundEnabled);
   const reduceMotion = useReducedMotion();
@@ -134,7 +125,10 @@ export function RoleReveal({ player, onCancel, onDone }: Props) {
   }, [flipped, onCancel]);
 
   const fx = isWolf ? (WOLF_FX[player.roleId ?? ""] ?? WOLF_FX.WOLF) : null;
-  const [troll] = useState(() => VILLAGER_TROLL[Math.floor(Math.random() * VILLAGER_TROLL.length)]);
+  const [quip] = useState(() => {
+    const pool = ROLE_QUIPS[player.roleId as keyof typeof ROLE_QUIPS] ?? [];
+    return pool[Math.floor(Math.random() * pool.length)];
+  });
 
   const flip = () => {
     if (flipped) return;
@@ -185,126 +179,149 @@ export function RoleReveal({ player, onCancel, onDone }: Props) {
         animate={flipped && fx?.shake && !reduceMotion ? fx.shake : { x: 0, y: 0, scale: 1 }}
         transition={{ duration: fx?.shakeDuration ?? 0.42, ease: "linear" }}
       >
-        <AnimatePresence mode="wait" initial={false}>
-          {!flipped ? (
-            <motion.section
-              key="cover"
-              exit={isWolf ? { opacity: 0, transition: { duration: 0 } } : { opacity: 0, scale: 0.97, transition: { duration: 0.18 } }}
-              className="flex flex-1 flex-col"
+        {/* Đầu trang: chữ đổi tại chỗ, chiều cao cố định để lá bài không bị xê dịch khi lật. */}
+        <div className="grid pt-8">
+          <motion.div
+            className="[grid-area:1/1]"
+            animate={{ opacity: flipped ? 0 : 1, y: flipped ? -8 : 0 }}
+            transition={{ duration: 0.3 }}
+            aria-hidden={flipped}
+          >
+            <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">Bài của · chỉ người này được nhìn</p>
+            <h2 className="mt-2 truncate pt-[0.1em] font-display text-[clamp(2.75rem,13vw,4.75rem)] uppercase leading-[1.18] text-bone">
+              {player.name}
+            </h2>
+          </motion.div>
+          <motion.div
+            className="[grid-area:1/1]"
+            initial={false}
+            animate={{ opacity: flipped ? 1 : 0, y: flipped ? 0 : 8 }}
+            transition={{ duration: 0.4, delay: flipped ? 0.35 : 0 }}
+            aria-hidden={!flipped}
+          >
+            <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">
+              {player.name} · {isWolf ? <span className="text-blood">Phe Sói</span> : "Phe Làng"}
+            </p>
+            <h2
+              className={`mt-2 truncate pt-[0.1em] font-display text-[clamp(2.75rem,13vw,4.75rem)] uppercase leading-[1.18] ${
+                isWolf ? "text-blood" : "text-bone"
+              }`}
             >
-              <div className="pt-10">
-                {/* Tải sẵn ảnh lá bài để lật là hiện ngay. */}
-                {card && <Image src={card} alt="" width={720} height={980} priority className="hidden" />}
-                <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">Bài của</p>
-                <h2 className="mt-4 break-words font-display text-[clamp(3.5rem,18vw,7rem)] uppercase leading-[1.18] text-bone">
-                  {player.name}
-                </h2>
-                <p className="mt-3 max-w-[30ch] text-ash">
-                  Chỉ <span className="text-bone">{player.name}</span> được nhìn. Những người khác, quay mặt đi.
-                </p>
-              </div>
+              {flipped ? (role?.name ?? "???") : " "}
+            </h2>
+          </motion.div>
+        </div>
 
-              <button
-                type="button"
-                onClick={flip}
-                aria-label="Lật bài"
-                className="group relative my-6 flex min-h-64 flex-1 flex-col items-center justify-center gap-3 transition-transform active:scale-[0.98]"
-              >
-                <motion.span
-                  className="relative block h-[min(48dvh,30rem)] aspect-720/913"
-                  animate={reduceMotion ? undefined : { y: [0, -6, 0] }}
-                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                >
+        {/* Lá bài: một tấm hai mặt, lật 3D tại chỗ. */}
+        <button
+          type="button"
+          onClick={flip}
+          disabled={flipped}
+          aria-label={flipped ? (role?.name ?? "Lá bài") : "Lật bài"}
+          className="relative mx-auto mt-4 block shrink-0 [perspective:1400px] disabled:cursor-default"
+        >
+          <motion.span
+            className="block"
+            animate={!flipped && !reduceMotion ? { y: [0, -6, 0] } : { y: 0 }}
+            transition={!flipped ? { duration: 3, repeat: Infinity, ease: "easeInOut" } : { duration: 0.3 }}
+          >
+            <motion.span
+              className="relative block aspect-9/16 h-[min(44dvh,28rem)] [transform-style:preserve-3d]"
+              initial={false}
+              animate={flipped ? { rotateY: 180, scale: reduceMotion ? 1 : [1, 1.08, 1] } : { rotateY: 0, scale: 1 }}
+              transition={{ duration: reduceMotion ? 0.01 : 0.75, ease: [0.4, 0, 0.2, 1] }}
+            >
+              {/* Mặt sau */}
+              <span className="absolute inset-0 [backface-visibility:hidden]">
+                <Image
+                  src={art("card-back")}
+                  alt=""
+                  fill
+                  priority
+                  sizes="(max-width: 640px) 70vw, 320px"
+                  className="rounded-2xl object-contain shadow-[0_20px_60px_rgba(0,0,0,0.8)]"
+                />
+              </span>
+              {/* Mặt trước (tải sẵn để lật là thấy ngay) */}
+              <span className="absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)]">
+                {card ? (
                   <Image
-                    src="/art/card-back.jpg"
-                    alt=""
+                    src={card}
+                    alt={role?.name ?? ""}
                     fill
                     priority
-                    sizes="(max-width: 640px) 70vw, 380px"
-                    className="rounded-2xl object-contain shadow-[0_20px_60px_rgba(0,0,0,0.8)]"
+                    sizes="(max-width: 640px) 70vw, 320px"
+                    className={`rounded-2xl object-contain shadow-[0_20px_60px_rgba(0,0,0,0.8)] ${
+                      isWolf ? "drop-shadow-[0_0_24px_rgba(195,22,28,0.45)]" : ""
+                    }`}
                   />
-                </motion.span>
-                <span className="font-mono text-xs uppercase tracking-[0.3em] text-ash">Chạm để lật bài</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={onCancel}
-                className="mb-4 h-16 font-mono text-xs uppercase tracking-[0.2em] text-ash active:text-bone"
-              >
-                Không phải tôi
-              </button>
-            </motion.section>
-          ) : (
-            <motion.section
-              key="face"
-              initial={isWolf ? { opacity: 1, scale: 1.08 } : { opacity: 0, y: 12, filter: "blur(6px)" }}
-              animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
-              transition={isWolf ? { duration: 0.25, ease: "easeOut" } : { duration: 0.9, ease }}
-              className="flex flex-1 flex-col"
-            >
-              <div className="flex-1 pt-10">
-                <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">
-                  {player.name} · {role?.team === "WOLVES" ? "Phe Sói" : "Phe Dân"}
-                  {card && <span className={isWolf ? "text-blood" : "text-bone"}> · {role?.name}</span>}
-                </p>
-                {card ? (
-                  <>
-                    <h2 className="sr-only">{role?.name}</h2>
-                    <motion.div
-                      initial={isWolf ? false : { rotateY: 90 }}
-                      animate={{ rotateY: 0 }}
-                      transition={{ duration: 0.5, ease }}
-                      className="mx-auto mt-4 w-fit"
-                    >
-                      <Image
-                        src={card}
-                        alt={role?.name ?? ""}
-                        width={720}
-                        height={980}
-                        priority
-                        className={`h-auto max-h-[52dvh] w-auto rounded-2xl object-contain shadow-[0_20px_60px_rgba(0,0,0,0.8)] ${
-                          isWolf ? "ring-2 ring-blood/70" : "ring-1 ring-bone/20"
-                        }`}
-                      />
-                    </motion.div>
-                  </>
                 ) : (
-                  <h2
-                    className={`mt-5 font-display uppercase leading-[1.18] text-[clamp(5rem,28vw,11rem)] ${
+                  <span
+                    className={`grid size-full place-items-center rounded-2xl border border-line bg-ink-2 font-display text-5xl uppercase ${
                       isWolf ? "text-blood" : "text-bone"
                     }`}
                   >
                     {role?.name ?? "???"}
-                  </h2>
+                  </span>
+                )}
+              </span>
+            </motion.span>
+          </motion.span>
+        </button>
+
+        {/* Phần dưới: chỉ chữ thay đổi, lá bài đứng yên. */}
+        <div className="flex flex-1 flex-col">
+          <AnimatePresence mode="wait" initial={false}>
+            {!flipped ? (
+              <motion.div key="cover" exit={{ opacity: 0, transition: { duration: 0.15 } }} className="flex flex-1 flex-col">
+                <p className="mt-4 text-center font-mono text-xs uppercase tracking-[0.3em] text-ash">Chạm vào lá bài để lật</p>
+                <p className="mx-auto mt-2 max-w-[30ch] text-center text-sm text-ash">Những người khác, quay mặt đi.</p>
+                <div className="flex-1" />
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  className="mb-4 mt-4 h-16 font-mono text-xs uppercase tracking-[0.2em] text-ash active:text-bone"
+                >
+                  Không phải tôi
+                </button>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="face"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.55, ease }}
+                className="flex flex-1 flex-col"
+              >
+                {quip && (
+                  <p className={`mt-5 text-center font-display text-2xl uppercase leading-[1.25] ${isWolf ? "text-blood" : "text-bone"}`}>
+                    “{quip}”
+                  </p>
                 )}
                 {player.formerRoleId && (
-                  <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.2em] text-blood">
+                  <p className="mt-3 text-center font-mono text-[11px] uppercase tracking-[0.2em] text-blood">
                     Từng là {getRole(player.formerRoleId)?.name}, giờ đã hóa Sói
                   </p>
                 )}
-                <p className="mt-6 max-w-[34ch] text-lg leading-relaxed text-bone/85">
+                <p className="mt-4 text-base leading-relaxed text-bone/75">
                   {role?.description ?? "Không tìm thấy vai. Báo quản trò chia lại."}
                 </p>
-                {player.roleId === "VILLAGER" && <p className="mt-3 max-w-[34ch] text-base italic leading-snug text-ash">“{troll}”</p>}
-              </div>
-
-              <motion.button
-                type="button"
-                onClick={onDone}
-                disabled={!canHide}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: canHide ? 1 : 0.3, y: 0 }}
-                transition={{ duration: 0.4 }}
-                whileTap={{ scale: 0.97 }}
-                className="mb-4 flex h-20 w-full items-center justify-between rounded-2xl bg-bone px-6 text-ink"
-              >
-                <span className="font-display text-3xl uppercase leading-none">Đã hiểu, giấu bài</span>
-                <EyeOff className="size-7" strokeWidth={2} />
-              </motion.button>
-            </motion.section>
-          )}
-        </AnimatePresence>
+                <div className="flex-1" />
+                <motion.button
+                  type="button"
+                  onClick={onDone}
+                  disabled={!canHide}
+                  animate={{ opacity: canHide ? 1 : 0.3 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="mb-4 mt-6 flex h-20 w-full items-center justify-between rounded-2xl bg-bone px-6 text-ink"
+                >
+                  <span className="font-display text-3xl uppercase leading-[1.08]">Đã hiểu, giấu bài</span>
+                  <EyeOff className="size-7" strokeWidth={2} />
+                </motion.button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </motion.div>
     </motion.div>
   );

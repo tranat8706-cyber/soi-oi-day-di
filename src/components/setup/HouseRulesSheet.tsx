@@ -173,7 +173,7 @@ export function HouseRulesSheet({ open, onClose }: Props) {
             <div className="flex items-center justify-between pt-4">
               <div>
                 <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">Luật nhà</p>
-                <h2 id="house-rules-title" className="font-display text-4xl uppercase leading-none text-bone">
+                <h2 id="house-rules-title" className="font-display text-4xl uppercase leading-[1.15] text-bone">
                   Bàn này chơi sao?
                 </h2>
               </div>

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, Eye, Gavel, Moon, Smartphone, Users } from "lucide-react";
+import { MAX_PLAYERS, MIN_PLAYERS, useGameStore } from "@/store/gameStore";
+import { SKILL_LEVELS, type SkillLevel } from "@/utils/balancer";
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -16,8 +18,8 @@ const SLIDES = [
   {
     icon: Users,
     kicker: "Bước 1",
-    title: ["Gõ tên", "người chơi."],
-    body: "Gõ tên từng người ngồi quanh bàn, cần từ 5 người trở lên. App tự đếm số người và tự chia bài cho cân. Lười gõ thì bấm Thêm nhanh.",
+    title: ["Điền tên", "người chơi."],
+    body: "App tạo sẵn chỗ ngồi theo số người bạn chọn. Chạm vào từng chỗ để đổi thành tên thật, theo đúng vòng ngồi quanh bàn.",
   },
   {
     icon: Eye,
@@ -39,7 +41,30 @@ const SLIDES = [
   },
 ] as const;
 
+const COUNTS = Array.from({ length: MAX_PLAYERS - MIN_PLAYERS + 1 }, (_, k) => MIN_PLAYERS + k);
+
+/** Ví dụ vai theo trình độ, để nhóm hình dung. */
+const SKILL_EXAMPLE: Record<SkillLevel, string> = {
+  NEWBIE: "Sói · Tiên tri · Bảo vệ · Phù thủy · Thợ săn",
+  MIXED: "Thêm Cupid, Già làng, Con điếm, Sói con…",
+  PRO: "Sói nguyền, Sói tiên tri, Sói trắng, Cáo, Kẻ cảm tử…",
+};
+
+/**
+ * Màn chào mỗi lần mở app: hướng dẫn nhanh (bỏ qua được), rồi hỏi nhóm mấy người và trình độ
+ * để app gợi ý bộ bài phù hợp.
+ */
 export function Onboarding({ onDone }: { onDone: () => void }) {
+  const players = useGameStore((st) => st.players);
+  const setPlayerCount = useGameStore((st) => st.setPlayerCount);
+  const skill = useGameStore((st) => st.skill);
+  const setSkill = useGameStore((st) => st.setSkill);
+  const setCustomDeck = useGameStore((st) => st.setCustomDeck);
+  const setSetupStep = useGameStore((st) => st.setSetupStep);
+
+  const [phase, setPhase] = useState<"guide" | "count" | "skill">("guide");
+  const [count, setCount] = useState(() => (players.length >= MIN_PLAYERS ? players.length : 8));
+  const [level, setLevel] = useState<SkillLevel>(skill);
   const [i, setI] = useState(0);
   const [dir, setDir] = useState(1);
   const last = i === SLIDES.length - 1;
@@ -48,9 +73,17 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
 
   const go = (next: number) => {
     if (next < 0) return;
-    if (next >= SLIDES.length) return onDone();
+    if (next >= SLIDES.length) return setPhase("count");
     setDir(next > i ? 1 : -1);
     setI(next);
+  };
+
+  const finish = () => {
+    setPlayerCount(count);
+    setSkill(level);
+    setCustomDeck(null); // để app chia theo trình độ vừa chọn
+    setSetupStep(1);
+    onDone();
   };
 
   useEffect(() => {
@@ -75,25 +108,35 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(90%_60%_at_50%_0%,rgba(195,22,28,0.18),transparent_70%)]"
       />
-      <div className="relative mx-auto flex w-full max-w-xl flex-1 flex-col pt-safe">
+      <div className="relative mx-auto flex min-h-0 w-full max-w-xl flex-1 flex-col pt-safe">
         <header className="flex items-center justify-between px-safe pt-2">
-          <div className="flex gap-1.5" aria-hidden>
-            {SLIDES.map((_, k) => (
-              <span
-                key={k}
-                className={`h-1 rounded-full transition-all duration-500 ${k === i ? "w-8 bg-blood" : k < i ? "w-4 bg-bone/60" : "w-4 bg-line"}`}
-              />
-            ))}
+          <div className="flex min-h-16 items-center gap-1.5" aria-hidden>
+            {phase === "guide" ? (
+              SLIDES.map((_, k) => (
+                <span
+                  key={k}
+                  className={`h-1 rounded-full transition-all duration-500 ${k === i ? "w-8 bg-blood" : k < i ? "w-4 bg-bone/60" : "w-4 bg-line"}`}
+                />
+              ))
+            ) : (
+              <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">
+                Câu hỏi {phase === "count" ? "1" : "2"}/2
+              </span>
+            )}
           </div>
-          <button
-            type="button"
-            onClick={onDone}
-            className="-mr-3 min-h-16 px-3 font-mono text-[11px] uppercase tracking-[0.2em] text-ash active:text-bone"
-          >
-            Bỏ qua
-          </button>
+          {phase === "guide" && (
+            <button
+              type="button"
+              onClick={() => setPhase("count")}
+              className="-mr-3 min-h-16 rounded-full px-4 font-mono text-[11px] uppercase tracking-[0.2em] text-bone active:text-ash"
+            >
+              Biết rồi · bỏ qua
+            </button>
+          )}
         </header>
 
+        {phase === "guide" ? (
+          <>
         <motion.div
           className="flex flex-1 flex-col justify-center overflow-hidden px-safe"
           drag="x"
@@ -145,11 +188,126 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
               whileTap={{ scale: 0.97 }}
               className={`flex h-20 flex-1 items-center justify-between rounded-2xl px-6 ${last ? "bg-blood text-bone" : "bg-bone text-ink"}`}
             >
-              <span className="font-display text-3xl uppercase leading-none">{last ? "Vào bàn thôi" : "Tiếp"}</span>
+              <span className="font-display text-3xl uppercase leading-[1.08]">{last ? "Tiếp · 2 câu hỏi" : "Tiếp"}</span>
               <ArrowRight className="size-7" strokeWidth={2} />
             </motion.button>
           </div>
         </div>
+          </>
+        ) : (
+          <>
+            <div className="min-h-0 flex-1 overflow-y-auto px-safe">
+              <AnimatePresence mode="wait" initial={false}>
+                {phase === "count" ? (
+                  <motion.div
+                    key="count"
+                    initial={{ opacity: 0, x: 40 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -40 }}
+                    transition={{ duration: 0.35, ease }}
+                    className="pt-6"
+                  >
+                    <h2 className="pt-[0.08em] font-display text-[clamp(2.75rem,13vw,4.5rem)] uppercase leading-[1.18] text-bone">
+                      Nhóm bạn
+                      <br />
+                      mấy người<span className="text-blood">?</span>
+                    </h2>
+                    <p className="mt-3 text-base leading-snug text-ash">
+                      Chỉ đếm người chơi, <span className="text-bone">không tính Quản trò</span>. Đổi lại sau cũng được.
+                    </p>
+                    <p className="mt-6 text-center font-display text-[7rem] leading-none tabular-nums text-blood" aria-live="polite">
+                      {count}
+                    </p>
+                    <div role="radiogroup" aria-label="Số người chơi" className="mt-6 grid grid-cols-4 gap-2 pb-6">
+                      {COUNTS.map((k) => (
+                        <button
+                          key={k}
+                          type="button"
+                          role="radio"
+                          aria-checked={count === k}
+                          onClick={() => setCount(k)}
+                          className={`h-14 rounded-xl font-display text-2xl tabular-nums transition-colors ${
+                            count === k ? "bg-bone text-ink" : "border border-line text-bone active:bg-ink-2"
+                          }`}
+                        >
+                          {k}
+                        </button>
+                      ))}
+                    </div>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="skill"
+                    initial={{ opacity: 0, x: 40 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -40 }}
+                    transition={{ duration: 0.35, ease }}
+                    className="pt-6"
+                  >
+                    <h2 className="pt-[0.08em] font-display text-[clamp(2.75rem,13vw,4.5rem)] uppercase leading-[1.18] text-bone">
+                      Trình độ
+                      <br />
+                      cả bàn<span className="text-blood">?</span>
+                    </h2>
+                    <p className="mt-3 text-base leading-snug text-ash">App sẽ gợi ý bộ bài hợp với nhóm. Vẫn sửa được ở bước chọn bài.</p>
+                    <div role="radiogroup" aria-label="Trình độ" className="mt-6 flex flex-col gap-3 pb-6">
+                      {SKILL_LEVELS.map((o) => {
+                        const on = level === o.id;
+                        return (
+                          <button
+                            key={o.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={on}
+                            onClick={() => setLevel(o.id)}
+                            className={`rounded-2xl border px-5 py-4 text-left transition-colors ${
+                              on ? "border-blood bg-blood/15" : "border-line active:bg-ink-2"
+                            }`}
+                          >
+                            <span className="flex items-center justify-between gap-3">
+                              <span className="pt-[0.08em] font-display text-3xl uppercase leading-[1.18] text-bone">{o.label}</span>
+                              <span
+                                aria-hidden
+                                className={`grid size-6 shrink-0 place-items-center rounded-full border ${on ? "border-blood bg-blood" : "border-line"}`}
+                              >
+                                {on && <span className="size-2 rounded-full bg-bone" />}
+                              </span>
+                            </span>
+                            <span className="mt-1 block text-sm leading-snug text-bone/75">{o.hint}</span>
+                            <span className="mt-2 block font-mono text-[10px] uppercase tracking-[0.15em] text-ash">{SKILL_EXAMPLE[o.id]}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <div className="px-safe pb-safe">
+              <div className="flex gap-3 pb-4 pt-2">
+                <button
+                  type="button"
+                  onClick={() => (phase === "skill" ? setPhase("count") : setPhase("guide"))}
+                  className="h-20 rounded-2xl border border-line px-6 font-mono text-xs uppercase tracking-[0.2em] text-ash active:text-bone"
+                >
+                  Lùi
+                </button>
+                <motion.button
+                  type="button"
+                  onClick={() => (phase === "count" ? setPhase("skill") : finish())}
+                  whileTap={{ scale: 0.97 }}
+                  className={`flex h-20 flex-1 items-center justify-between rounded-2xl px-6 ${
+                    phase === "skill" ? "bg-blood text-bone" : "bg-bone text-ink"
+                  }`}
+                >
+                  <span className="font-display text-3xl uppercase leading-[1.08]">{phase === "skill" ? "Vào bàn thôi" : "Tiếp"}</span>
+                  <ArrowRight className="size-7" strokeWidth={2} />
+                </motion.button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </motion.div>
   );

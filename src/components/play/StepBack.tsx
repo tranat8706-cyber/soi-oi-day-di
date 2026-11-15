@@ -76,7 +76,7 @@ export function StepBack() {
                   className="flex h-16 items-center justify-center gap-2 rounded-2xl bg-bone text-ink"
                 >
                   <Undo2 className="size-5" strokeWidth={2} />
-                  <span className="font-display text-2xl uppercase leading-none">Lùi lại</span>
+                  <span className="font-display text-2xl uppercase leading-[1.08]">Lùi lại</span>
                 </motion.button>
               </div>
             </motion.div>

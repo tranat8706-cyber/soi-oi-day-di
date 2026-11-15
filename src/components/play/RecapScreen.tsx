@@ -7,6 +7,9 @@ import { RotateCcw } from "lucide-react";
 import { getRole } from "@/constants/roles";
 import { useGameStore, type Player, type Winner } from "@/store/gameStore";
 import { StepBack } from "./StepBack";
+import { useArt } from "@/hooks/useArt";
+import type { ArtName } from "@/constants/themes";
+import { awards, type LogEntry } from "@/utils/gameLog";
 
 const ease = [0.22, 1, 0.36, 1] as const;
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -15,11 +18,11 @@ const GRAIN =
   "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")";
 
 /** Chữ, màu và quầng sáng theo phe thắng. */
-const WIN_LOOK: Record<Winner, { top: string; text: string; glow: string; size: string; art: string }> = {
-  WOLF: { top: "Sói", text: "text-blood", glow: "bg-blood/40", size: "text-[18cqw]", art: "/art/win-wolf.jpg" },
-  VILLAGER: { top: "Làng", text: "text-moss", glow: "bg-moss/30", size: "text-[18cqw]", art: "/art/win-village.jpg" },
-  LOVERS: { top: "Cặp đôi", text: "text-rose", glow: "bg-rose/35", size: "text-[15cqw]", art: "/art/win-lovers.jpg" },
-  WHITE_WOLF: { top: "Sói trắng", text: "text-bone", glow: "bg-bone/20", size: "text-[14cqw]", art: "/art/win-white-wolf.jpg" },
+const WIN_LOOK: Record<Winner, { top: string; text: string; glow: string; size: string; art: ArtName }> = {
+  WOLF: { top: "Sói", text: "text-blood", glow: "bg-blood/40", size: "text-[18cqw]", art: "win-wolf" },
+  VILLAGER: { top: "Làng", text: "text-moss", glow: "bg-moss/30", size: "text-[18cqw]", art: "win-village" },
+  LOVERS: { top: "Cặp đôi", text: "text-rose", glow: "bg-rose/35", size: "text-[15cqw]", art: "win-lovers" },
+  WHITE_WOLF: { top: "Sói trắng", text: "text-bone", glow: "bg-bone/20", size: "text-[14cqw]", art: "win-white-wolf" },
 };
 
 /** Lệch nhẹ cho mỗi tấm polaroid, cố định theo vị trí. */
@@ -33,6 +36,7 @@ function cols(n: number) {
 }
 
 export function RecapScreen() {
+  const { art } = useArt();
   const players = useGameStore((s) => s.players);
   const winner = useGameStore((s) => s.winner);
   const sessionTitle = useGameStore((s) => s.sessionTitle);
@@ -75,7 +79,7 @@ export function RecapScreen() {
           animate={{ opacity: 0.85, scale: 1 }}
           transition={{ duration: 2.4, ease }}
         >
-          <Image src={look.art} alt="" fill priority sizes="(max-width: 640px) 100vw, 600px" className="object-cover object-top" />
+          <Image src={art(look.art)} alt="" fill priority sizes="(max-width: 640px) 100vw, 600px" className="object-cover object-top" />
           <div className="absolute inset-0 bg-linear-to-b from-ink/20 via-ink/50 to-ink" />
         </motion.div>
         {/* Quầng màu phe thắng */}
@@ -135,14 +139,16 @@ export function RecapScreen() {
         </div>
       </motion.section>
 
-      <div className="mt-5 w-full px-safe pb-safe">
+      <GameDiary players={players} />
+
+      <div className="mt-8 w-full px-safe pb-safe">
         <motion.button
           type="button"
           onClick={rematch}
           whileTap={{ scale: 0.97 }}
           className="flex h-20 w-full items-center justify-between rounded-2xl bg-bone px-6 text-ink"
         >
-          <span className="font-display text-[clamp(1.4rem,6vw,1.9rem)] uppercase leading-none">Chơi ván mới với nhóm này</span>
+          <span className="font-display text-[clamp(1.4rem,6vw,1.9rem)] uppercase leading-[1.08]">Chơi ván mới với nhóm này</span>
           <RotateCcw className="size-7 shrink-0" strokeWidth={2} />
         </motion.button>
         <button
@@ -241,5 +247,91 @@ function Polaroid({
         )}
       </figcaption>
     </motion.figure>
+  );
+}
+
+const TONE: Record<LogEntry["tone"], { tag: string; cls: string } | null> = {
+  good: { tag: "Chơi hay quá ta", cls: "bg-moss/20 text-moss" },
+  bad: { tag: "Chơi dở ẹc", cls: "bg-blood/20 text-blood" },
+  info: null,
+};
+
+/** Nhật ký từ đêm 1 tới hết ván, kèm giải hay nhất / dở nhất. */
+function GameDiary({ players }: { players: Player[] }) {
+  const log = useGameStore((s) => s.gameLog);
+  if (!log.length) return null;
+  const { best, worst } = awards(log);
+  const nameOf = (id?: string) => players.find((p) => p.id === id)?.name;
+  // Gom theo từng chặng: Đêm 1, Ngày 1, Đêm 2…
+  const chapters: { key: string; title: string; items: LogEntry[] }[] = [];
+  for (const e of log) {
+    const key = `${e.phase}-${e.round}`;
+    let ch = chapters.at(-1);
+    if (!ch || ch.key !== key) {
+      ch = { key, title: `${e.phase === "NIGHT" ? "Đêm" : "Ngày"} ${e.round}`, items: [] };
+      chapters.push(ch);
+    }
+    ch.items.push(e);
+  }
+  const goods = log.filter((e) => e.tone === "good").length;
+  const bads = log.filter((e) => e.tone === "bad").length;
+
+  return (
+    <section className="mt-10 w-full px-safe" aria-label="Nhật ký ván">
+      <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">Nhật ký ván · đêm 1 tới hạ màn</p>
+      <h2 className="mt-2 pt-[0.1em] font-display text-[clamp(2.5rem,12vw,4rem)] uppercase leading-[1.18] text-bone">
+        Ván này ra sao<span className="text-blood">?</span>
+      </h2>
+      <p className="mt-2 text-sm leading-snug text-ash">
+        {goods} pha hay, {bads} pha dở.{" "}
+        {bads > goods ? "Cả bàn nên đi học lại." : goods > bads * 2 ? "Bàn này toàn cao thủ." : "Có hay có dở, vậy mới vui."}
+      </p>
+
+      {(best || worst) && (
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          {best && (
+            <div className="rounded-2xl border border-moss/40 bg-moss/10 px-4 py-3">
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-moss">Chơi hay nhất</p>
+              <p className="mt-1 truncate pt-[0.1em] font-display text-2xl uppercase leading-[1.2] text-bone">{nameOf(best[0])}</p>
+              <p className="text-xs text-ash">{best[1]} pha để đời</p>
+            </div>
+          )}
+          {worst && (
+            <div className="rounded-2xl border border-blood/40 bg-blood/10 px-4 py-3">
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-blood">Gà nhất bàn</p>
+              <p className="mt-1 truncate pt-[0.1em] font-display text-2xl uppercase leading-[1.2] text-bone">{nameOf(worst[0])}</p>
+              <p className="text-xs text-ash">{worst[1]} pha muốn quên</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      <ol className="mt-6 border-l border-line">
+        {chapters.map((ch) => (
+          <li key={ch.key} className="relative pb-6 pl-5">
+            <span
+              aria-hidden
+              className={`absolute -left-[5px] top-1.5 size-[9px] rounded-full ${ch.key.startsWith("NIGHT") ? "bg-blood" : "bg-bone"}`}
+            />
+            <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-bone">{ch.title}</p>
+            <ul className="mt-2 flex flex-col gap-2.5">
+              {ch.items.map((e, i) => {
+                const tone = TONE[e.tone];
+                return (
+                  <li key={i} className="text-[15px] leading-snug text-bone/85">
+                    {e.text}
+                    {tone && (
+                      <span className={`ml-2 inline-block whitespace-nowrap rounded-md px-1.5 py-0.5 align-middle text-[11px] font-semibold ${tone.cls}`}>
+                        {tone.tag}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }

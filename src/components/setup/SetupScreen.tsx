@@ -14,6 +14,9 @@ import { HouseRulesList, HouseRulesSheet } from "./HouseRulesSheet";
 import { DeckEditor, useCurrentDeck } from "./DeckEditor";
 import { BalanceMeter } from "./BalanceMeter";
 import { Onboarding } from "./Onboarding";
+import Image from "next/image";
+import { Lock } from "lucide-react";
+import { THEME_ORDER, THEMES, PRO_THEMES_UNLOCKED, activeTheme, cardSrc } from "@/constants/themes";
 
 const QUICK_FILL = [6, 8, 10, 12];
 const ease = [0.22, 1, 0.36, 1] as const;
@@ -364,6 +367,8 @@ export function SetupScreen() {
                 <HouseRulesList />
               </div>
 
+              <ThemePicker />
+
               <section className="mt-10">
                 <label htmlFor="session-title" className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">
                   Tên ván <span className="text-ash/50">· không bắt buộc</span>
@@ -415,7 +420,7 @@ export function SetupScreen() {
                     step === 3 ? "bg-blood text-bone" : "bg-bone text-ink"
                   }`}
                 >
-                  <span className="font-display text-3xl uppercase leading-none">{cta.label}</span>
+                  <span className="font-display text-3xl uppercase leading-[1.08]">{cta.label}</span>
                   <ArrowRight className="size-7 transition-transform group-active:translate-x-1" strokeWidth={2} />
                 </motion.button>
               ) : (
@@ -484,7 +489,7 @@ export function SetupScreen() {
                   }}
                   className="flex h-16 w-full items-center justify-center rounded-2xl bg-bone text-ink"
                 >
-                  <span className="font-display text-2xl uppercase leading-none">Cân bằng giúp, tôi xem lại</span>
+                  <span className="font-display text-2xl uppercase leading-[1.08]">Cân bằng giúp, tôi xem lại</span>
                 </motion.button>
                 <button
                   type="button"
@@ -504,5 +509,73 @@ export function SetupScreen() {
 
       <AnimatePresence>{!onboarded && <Onboarding key="onboarding" onDone={() => setOnboarded(true)} />}</AnimatePresence>
     </div>
+  );
+}
+
+/** Chọn bộ hình lá bài. Bộ Pro hiện khóa, chạm vào thì báo sắp có. */
+function ThemePicker() {
+  const theme = useGameStore((s) => s.theme);
+  const setTheme = useGameStore((s) => s.setTheme);
+  const current = activeTheme(theme).id;
+  const [note, setNote] = useState(false);
+
+  return (
+    <section className="mt-10">
+      <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">Bộ hình lá bài</p>
+      <div role="radiogroup" aria-label="Bộ hình lá bài" className="mt-3 grid grid-cols-2 gap-3">
+        {THEME_ORDER.map((id) => {
+          const t = THEMES[id];
+          const locked = t.pro && !PRO_THEMES_UNLOCKED;
+          const on = current === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => (locked ? setNote(true) : (setTheme(id), setNote(false)))}
+              className={`overflow-hidden rounded-2xl border text-left transition-colors ${on ? "border-blood" : "border-line"}`}
+            >
+              <span className="relative block aspect-[4/3] bg-ink-2">
+                {[ "WOLF", "SEER", "WITCH" ].map((rid, k) => (
+                  <span
+                    key={rid}
+                    className="absolute top-3 h-[80%] aspect-9/16 overflow-hidden rounded-md shadow-lg"
+                    style={{ left: `${14 + k * 24}%`, transform: `rotate(${(k - 1) * 8}deg)`, zIndex: k === 1 ? 2 : 1 }}
+                  >
+                    <Image
+                      src={cardSrc(t, rid)!}
+                      alt=""
+                      fill
+                      sizes="80px"
+                      className={`object-cover ${locked ? "blur-[3px] brightness-50" : ""}`}
+                    />
+                  </span>
+                ))}
+                {locked && (
+                  <span className="absolute inset-0 z-10 grid place-items-center">
+                    <span className="flex items-center gap-1.5 rounded-full bg-ink/85 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-bone">
+                      <Lock className="size-3.5" strokeWidth={2} /> Pro
+                    </span>
+                  </span>
+                )}
+              </span>
+              <span className="block px-3 py-3">
+                <span className="flex items-center justify-between gap-2">
+                  <span className="pt-[0.1em] font-display text-xl uppercase leading-[1.2] text-bone">{t.name}</span>
+                  {on && <Check className="size-5 shrink-0 text-blood" strokeWidth={2.5} />}
+                </span>
+                <span className="mt-1 block text-xs leading-snug text-ash">{t.blurb}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {note && (
+        <p className="mt-3 rounded-2xl border border-line px-4 py-3 text-sm leading-snug text-ash">
+          Bộ <span className="text-bone">Gợi cảm</span> sẽ mở trong bản Pro, sắp ra mắt. Tạm thời cả bàn dùng bộ Truyền thống nhé.
+        </p>
+      )}
+    </section>
   );
 }

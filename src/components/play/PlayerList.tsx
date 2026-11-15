@@ -84,17 +84,24 @@ export function PlayerList({
               >
                 {p.name}
               </span>
-              {(role || reason || note) && (
-                <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.18em] text-ash">
-                  {role && (
-                    <span className={role.team === "WOLVES" && !dead ? "text-blood" : undefined}>
-                      {role.name}
-                      {p.formerRoleId && ` (từng là ${getRole(p.formerRoleId)?.name ?? "?"})`}
-                    </span>
-                  )}
-                  {role && (reason || note) && " · "}
-                  {note ?? reason}
+              {role && (
+                <span
+                  className={`mt-1 inline-flex max-w-full items-center rounded-md px-2 py-0.5 text-[13px] font-semibold leading-tight ${
+                    dead
+                      ? "bg-line text-neutral-400"
+                      : role.team === "WOLVES"
+                        ? "bg-blood text-bone"
+                        : "bg-bone/90 text-ink"
+                  }`}
+                >
+                  <span className="truncate">
+                    {role.name}
+                    {p.formerRoleId && ` · từng là ${getRole(p.formerRoleId)?.name ?? "?"}`}
+                  </span>
                 </span>
+              )}
+              {(reason || note) && (
+                <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.18em] text-ash">{note ?? reason}</span>
               )}
             </span>
             {trailing?.(p)}

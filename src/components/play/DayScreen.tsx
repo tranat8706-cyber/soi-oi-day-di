@@ -12,6 +12,7 @@ import { PlayerList } from "./PlayerList";
 import { DeathRoulette } from "./DeathRoulette";
 import { RoleReviewButton } from "./RoleReviewSheet";
 import { StepBack } from "./StepBack";
+import { useArt } from "@/hooks/useArt";
 
 const ease = [0.22, 1, 0.36, 1] as const;
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -24,6 +25,7 @@ const DEFENSE_SECONDS = 60;
  *  3. Phán quyết: treo thì nói lời cuối; tha thì có thể tố người khác.
  */
 export function DayScreen() {
+  const { art } = useArt();
   const players = useGameStore((s) => s.players);
   const nightNumber = useGameStore((s) => s.nightNumber);
   const morningScript = useGameStore((s) => s.morningScript);
@@ -191,7 +193,7 @@ export function DayScreen() {
                   animate={{ opacity: 0.7, scale: 1 }}
                   transition={{ duration: 2.4, ease }}
                 >
-                  <Image src="/art/day.jpg" alt="" fill priority sizes="(max-width: 640px) 100vw, 640px" className="object-cover object-[50%_30%]" />
+                  <Image src={art("day")} alt="" fill priority sizes="(max-width: 640px) 100vw, 640px" className="object-cover object-[50%_55%]" />
                   <div className="absolute inset-0 bg-linear-to-b from-ink/0 via-ink/40 to-ink" />
                 </motion.div>
                 <motion.h1
@@ -417,7 +419,7 @@ export function DayScreen() {
                     whileTap={{ scale: 0.97 }}
                     className="flex h-20 flex-col items-center justify-center rounded-2xl border border-bone/40 text-bone"
                   >
-                    <span className="font-display text-3xl uppercase leading-none">Tha</span>
+                    <span className="font-display text-3xl uppercase leading-[1.08]">Tha</span>
                     <span className="mt-1 font-mono text-[9px] uppercase tracking-[0.18em] text-ash">Đa số tha</span>
                   </motion.button>
                   <motion.button
@@ -429,7 +431,7 @@ export function DayScreen() {
                       confirmHang ? "bg-blood text-bone" : "bg-bone text-ink"
                     }`}
                   >
-                    <span className="font-display text-3xl uppercase leading-none">{confirmHang ? "Chắc chưa?" : "Treo cổ"}</span>
+                    <span className="font-display text-3xl uppercase leading-[1.08]">{confirmHang ? "Chắc chưa?" : "Treo cổ"}</span>
                     <span className={`mt-1 font-mono text-[9px] uppercase tracking-[0.18em] ${confirmHang ? "text-bone/80" : "text-ink/60"}`}>
                       {confirmHang ? "Chạm lần nữa" : "Đa số treo"}
                     </span>
@@ -466,7 +468,7 @@ export function DayScreen() {
                   className="flex h-20 w-full items-center justify-between rounded-2xl border border-bone/40 bg-ink px-6 text-bone"
                 >
                   <span className="text-left">
-                    <span className="block font-display text-3xl uppercase leading-none">{revote ? "Vẫn hòa" : "Hòa phiếu"}</span>
+                    <span className="block font-display text-3xl uppercase leading-[1.08]">{revote ? "Vẫn hòa" : "Hòa phiếu"}</span>
                     <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.18em] text-ash">
                       Không treo ai · màn đêm buông xuống
                     </span>
@@ -489,7 +491,7 @@ export function DayScreen() {
                   className="flex h-20 w-full items-center justify-between rounded-2xl bg-blood px-6 text-bone"
                 >
                   <span className="text-left">
-                    <span className="block font-display text-3xl uppercase leading-none">Hòa phiếu · Bầu lại</span>
+                    <span className="block font-display text-3xl uppercase leading-[1.08]">Hòa phiếu · Bầu lại</span>
                     <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.18em] text-bone/80">
                       Chỉ giữa {pickedPlayers.length} người bằng phiếu
                     </span>
@@ -514,7 +516,7 @@ export function DayScreen() {
                     transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
                   />
                   <span className="relative text-left">
-                    <span className="block font-display text-3xl uppercase leading-none">Hòa phiếu · Quay!</span>
+                    <span className="block font-display text-3xl uppercase leading-[1.08]">Hòa phiếu · Quay!</span>
                     <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.18em] text-bone/80">
                       {pickedPlayers.length} người bằng phiếu
                     </span>
@@ -535,7 +537,7 @@ export function DayScreen() {
                   }`}
                 >
                   <span className="text-left">
-                    <span className="block whitespace-nowrap font-display text-[clamp(1.4rem,7vw,1.875rem)] uppercase leading-none">
+                    <span className="block whitespace-nowrap font-display text-[clamp(1.4rem,7vw,1.875rem)] uppercase leading-[1.08]">
                       Màn đêm buông xuống
                     </span>
                     {!lynched && (
@@ -668,6 +670,7 @@ function TrialPanel({
   idiotMuted: boolean;
   onCancel: () => void;
 }) {
+  const { art } = useArt();
   const need = Math.floor(voters / 2) + 1;
   const [deadline, setDeadline] = useState<number | null>(null);
   const [left, setLeft] = useState(DEFENSE_SECONDS);
@@ -704,7 +707,7 @@ function TrialPanel({
       className="mt-2"
     >
       <div className="relative -mx-5 h-44 overflow-hidden">
-        <Image src="/art/gallows.jpg" alt="" fill priority sizes="(max-width: 640px) 100vw, 640px" className="object-cover object-[50%_40%] opacity-80" />
+        <Image src={art("gallows")} alt="" fill priority sizes="(max-width: 640px) 100vw, 640px" className="object-cover object-[50%_62%] opacity-80" />
         <div className="absolute inset-0 bg-linear-to-b from-ink/0 via-ink/30 to-ink" />
       </div>
       <p className="relative -mt-6 font-mono text-[11px] uppercase tracking-[0.25em] text-blood">

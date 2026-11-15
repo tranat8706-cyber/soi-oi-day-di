@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
 import { ChevronDown, Eye, EyeOff, Sun } from "lucide-react";
-import { cardImage, getRole, isWolfRole, looksLikeWolf, NIGHT_SEQUENCE, wakesOnNight, type Role } from "@/constants/roles";
+import { getRole, isWolfRole, ROLES, looksLikeWolf, NIGHT_SEQUENCE, wakesOnNight, type Role } from "@/constants/roles";
 import {
   stepOf,
   useGameStore,
@@ -18,6 +18,7 @@ import { foxGroup } from "@/utils/rules";
 import { DeckSummary } from "../DeckSummary";
 import { PlayerList } from "./PlayerList";
 import { StepBack } from "./StepBack";
+import { useArt } from "@/hooks/useArt";
 import { UndoToast, type ToastData } from "./UndoToast";
 
 const ease = [0.22, 1, 0.36, 1] as const;
@@ -65,11 +66,40 @@ const SKIP_LABEL: Partial<Record<NightRoleId, string>> = {
   WILD_CHILD: "Không chọn thần tượng",
 };
 
+/** Tên vai trong lời gọi, dài trước ngắn sau để "Sói tiên tri" không bị bắt thành "Sói". */
+const ROLE_NAMES = [...new Set([...Object.values(ROLES).map((r) => r.name), "Bầy Sói", "bầy Sói", "Sói", "sói"])].sort(
+  (a, b) => b.length - a.length,
+);
+// Tên vai chỉ gồm chữ và khoảng trắng nên ghép thẳng vào regex.
+const ROLE_RE = new RegExp(`(${ROLE_NAMES.join("|")})`, "g");
+const WOLF_NAMES = new Set(Object.values(ROLES).filter((r) => r.team === "WOLVES").map((r) => r.name));
+
+/** Tô đậm tên vai trong lời gọi để Quản trò liếc là đọc được. */
+function RoleText({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(ROLE_RE).map((part, i) =>
+        i % 2 ? (
+          <strong
+            key={i}
+            className={`font-bold ${WOLF_NAMES.has(part) || /^(bầy )?sói$/i.test(part) ? "text-blood" : "text-bone underline decoration-blood decoration-2 underline-offset-4"}`}
+          >
+            {part}
+          </strong>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+}
+
 const Label = ({ children }: { children: ReactNode }) => (
   <p className="mt-6 font-mono text-[10px] uppercase tracking-[0.25em] text-ash">{children}</p>
 );
 
 export function NightScreen() {
+  const { card, art } = useArt();
   const s = useGameStore();
   const {
     players,
@@ -342,7 +372,7 @@ export function NightScreen() {
                 big={getRole(t.roleId)?.name ?? "?"}
                 hint="Giơ màn hình cho Sói tiên tri thấy lá bài (người khác đang nhắm mắt)."
                 showTo="Sói tiên tri"
-                image={cardImage(t.roleId)}
+                image={card(t.roleId)}
               />
             )}
           </>
@@ -502,7 +532,7 @@ export function NightScreen() {
             animate={{ opacity: 0.75, scale: 1 }}
             transition={{ duration: 2.4, ease }}
           >
-            <Image src="/art/night.jpg" alt="" fill priority sizes="(max-width: 640px) 100vw, 640px" className="object-cover object-top" />
+            <Image src={art("night")} alt="" fill priority sizes="(max-width: 640px) 100vw, 640px" className="object-cover object-top" />
             <div className="absolute inset-0 bg-linear-to-b from-ink/10 via-ink/40 to-ink" />
           </motion.div>
           <motion.h1
@@ -560,17 +590,20 @@ export function NightScreen() {
                   aria-expanded={open}
                   className="flex min-h-20 w-full items-center gap-4 px-4 text-left"
                 >
-                  <span
-                    className={`grid size-10 shrink-0 place-items-center rounded-full font-mono text-sm tabular-nums ${
-                      done || blocked ? "bg-bone text-ink" : "border border-line text-ash"
-                    }`}
-                  >
-                    {idx + 1}
+                  <span className="relative h-16 w-9 shrink-0 overflow-hidden rounded-md border border-line">
+                    {card(role.id) && <Image src={card(role.id)!} alt="" fill sizes="36px" className="object-cover" />}
+                    <span
+                      className={`absolute -bottom-px -right-px grid size-5 place-items-center rounded-tl-md font-mono text-[10px] tabular-nums ${
+                        done || blocked ? "bg-bone text-ink" : "bg-ink text-ash"
+                      }`}
+                    >
+                      {idx + 1}
+                    </span>
                   </span>
                   <span className="min-w-0 flex-1">
                     <span
-                      className={`block font-display text-3xl uppercase leading-none ${
-                        blocked ? "text-neutral-500 line-through" : "text-bone"
+                      className={`block pt-[0.1em] font-display text-3xl uppercase leading-[1.1] ${
+                        blocked ? "text-neutral-500 line-through" : isWolfRole(role.id) ? "text-blood" : "text-bone"
                       }`}
                     >
                       {role.id === "WOLF" ? "Bầy Sói" : role.name}
@@ -581,7 +614,7 @@ export function NightScreen() {
                         : blocked
                           ? "Mất phép · vẫn gọi để giữ bí mật"
                           : (summary ??
-                            `${holders.filter((p) => p.isAlive).length} người · chưa chọn${
+                            `${holders.filter((p) => p.isAlive).map((p) => p.name).join(", ") || "Không ai"} · chưa chọn${
                               role.firstNightOnly ? " · chỉ đêm đầu" : role.evenNightsOnly ? " · đêm chẵn" : ""
                             }`)}
                     </span>
@@ -601,7 +634,9 @@ export function NightScreen() {
                       transition={{ duration: 0.3, ease }}
                     >
                       <div className="px-4 pb-4">
-                        <p className="border-l-2 border-blood pl-4 text-xl leading-relaxed text-bone">“{role.gmInstruction}”</p>
+                        <p className="border-l-2 border-blood pl-4 text-xl leading-relaxed text-bone/85">
+                          “<RoleText text={role.gmInstruction} />”
+                        </p>
                         {role.id === "WOLF" && holders.some((p) => p.roleId !== "WOLF") && (
                           <p className="mt-3 text-sm leading-snug text-ash">
                             Cả bầy cùng dậy:{" "}
@@ -654,7 +689,7 @@ export function NightScreen() {
                             done || blocked ? "bg-bone text-ink" : "border border-bone/40 text-bone active:bg-ink"
                           }`}
                         >
-                          <span className="font-display text-2xl uppercase leading-none">
+                          <span className="font-display text-2xl uppercase leading-[1.08]">
                             {next ? `Xong · gọi ${next.id === "WOLF" ? "bầy Sói" : next.name}` : "Xong · thu gọn"}
                           </span>
                           <ChevronDown className="size-6 shrink-0" strokeWidth={2} />
@@ -685,7 +720,7 @@ export function NightScreen() {
             }`}
           >
             <span className="min-w-0 text-left">
-              <span className="block font-display text-3xl uppercase leading-none">Gọi làng dậy</span>
+              <span className="block font-display text-3xl uppercase leading-[1.08]">Gọi làng dậy</span>
               {(requiredPending.length > 0 || confirmWake || pendingSteps.length > 0 || missingBite) && (
                 <span className="mt-1 block truncate font-mono text-[10px] uppercase tracking-[0.18em] opacity-80">
                   {requiredPending.length
@@ -727,6 +762,7 @@ function ResultCard({
   showTo?: string;
   image?: string | null;
 }) {
+  const { theme } = useArt();
   const [showing, setShowing] = useState(false);
   return (
     <>
@@ -771,7 +807,7 @@ function ResultCard({
           >
             <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">{who}</span>
             {image ? (
-              <Image src={image} alt={big} width={720} height={980} className="h-auto max-h-[62dvh] w-auto rounded-2xl" />
+              <Image src={image} alt={big} width={theme.card.w} height={theme.card.h} className="h-auto max-h-[62dvh] w-auto rounded-2xl" />
             ) : null}
             <span className={`pt-[0.15em] font-display text-[clamp(3rem,16vw,6rem)] uppercase leading-[1.15] ${danger ? "text-blood" : "text-bone"}`}>
               {big}

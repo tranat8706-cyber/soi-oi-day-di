@@ -288,9 +288,6 @@ export const SPECIAL_ROLES = ROLE_ORDER.filter((id) => id !== "WOLF" && id !== "
 >[];
 export type SpecialRoleId = Exclude<RoleId, "WOLF" | "VILLAGER">;
 
-/** Ảnh lá bài (public/cards/<id>.jpg). Vai mới chưa có ảnh thì bỏ khỏi đây để hiện chữ như cũ. */
-export const cardImage = (id: string | null | undefined) => (id && id in ROLES ? `/cards/${id.toLowerCase()}.jpg` : null);
-
 export const getRole = (id: string | null | undefined): Role | null =>
   id && id in ROLES ? ROLES[id as RoleId] : null;
 

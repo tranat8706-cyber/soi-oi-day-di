@@ -152,7 +152,7 @@ export function PassAndPlayScreen() {
                   transition={{ type: "spring", stiffness: 420, damping: 32 }}
                   className="flex h-20 w-full items-center justify-between rounded-2xl bg-blood px-6 text-bone"
                 >
-                  <span className="font-display text-3xl uppercase leading-none">Màn đêm buông xuống</span>
+                  <span className="font-display text-3xl uppercase leading-[1.08]">Cả làng đi ngủ</span>
                   <Moon className="size-7" strokeWidth={2} />
                 </motion.button>
               ) : (

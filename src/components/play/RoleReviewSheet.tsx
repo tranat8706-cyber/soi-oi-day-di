@@ -53,7 +53,7 @@ export function RoleReviewButton() {
               <div className="flex shrink-0 items-center justify-between pt-4">
                 <div>
                   <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">Xem lại bài</p>
-                  <h2 className="font-display text-4xl uppercase leading-none text-bone">Ai quên bài?</h2>
+                  <h2 className="font-display text-4xl uppercase leading-[1.15] text-bone">Ai quên bài?</h2>
                 </div>
                 <button
                   type="button"

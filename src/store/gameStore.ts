@@ -2,7 +2,9 @@ import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { isWolfRole, looksLikeWolf } from "@/constants/roles";
-import { assignRoles as balanceRoles, type DeckConfig } from "@/utils/balancer";
+import { assignRoles as balanceRoles, type DeckConfig, type SkillLevel } from "@/utils/balancer";
+import type { ThemeId } from "@/constants/themes";
+import { dayEntry, logLynch, logNight, logShot, logSpare, type LogEntry, type NightFacts } from "@/utils/gameLog";
 import {
   applyDeaths,
   computeWinner,
@@ -111,8 +113,16 @@ interface GameStore {
   gameState: GameState;
   isSoundEnabled: boolean;
 
-  /** Đã xem màn hướng dẫn lần đầu chưa. */
+  /** Đã qua màn chào (hướng dẫn + hỏi số người, trình độ) trong lần mở app này. Không lưu: mở lại app là hiện lại. */
   onboarded: boolean;
+  /** Trình độ của nhóm, quyết định bộ tự cân bằng. */
+  skill: SkillLevel;
+  setSkill: (v: SkillLevel) => void;
+  /** Bộ hình lá bài. */
+  theme: ThemeId;
+  setTheme: (v: ThemeId) => void;
+  /** Đặt đúng n chỗ ngồi: thiếu thì thêm tên tạm, thừa thì bớt từ cuối (ưu tiên bớt tên tạm). */
+  setPlayerCount: (n: number) => void;
   setOnboarded: (v: boolean) => void;
   /** Bộ bài tự chọn; null = tự cân bằng theo số người. */
   customDeck: DeckConfig | null;
@@ -183,6 +193,7 @@ interface GameStore {
   lastHarlotTargetId: string | null;
   /** Đứa trẻ hoang vừa hóa Sói, quản trò cần báo cho họ ở đêm kế tiếp. */
   newWolfIds: string[];
+  gameLog: LogEntry[];
   /** Các bước lớn (gọi làng dậy, treo, tha, bắn, sang đêm) để quản trò lùi lại khi lỡ tay. */
   undoStack: UndoEntry[];
   /** Lùi lại bước lớn gần nhất. */
@@ -258,6 +269,8 @@ const freshRound = {
   kamikazeUsed: false,
   lastHarlotTargetId: null as string | null,
   newWolfIds: [] as string[],
+  /** Nhật ký cả ván cho màn tổng kết. */
+  gameLog: [] as LogEntry[],
   undoStack: [] as UndoEntry[],
   pendingHunterId: null as string | null,
   hunterShotId: null as string | null,
@@ -426,6 +439,23 @@ export const useGameStore = create<GameStore>()(
       customDeck: null,
 
       setOnboarded: (onboarded) => set({ onboarded }),
+      skill: "MIXED",
+      setSkill: (skill) => set({ skill }),
+      theme: "classic",
+      setTheme: (theme) => set({ theme }),
+      setPlayerCount: (n) => {
+        const target = Math.min(MAX_PLAYERS, Math.max(MIN_PLAYERS, n));
+        const cur = get().players;
+        if (cur.length < target) return get().fillPlayers(target);
+        if (cur.length === target) return;
+        const placeholder = (p: Player) => /^Người \d+$/.test(p.name);
+        const extra = cur.length - target;
+        const dropped = new Set<string>();
+        // Bớt tên tạm trước, rồi mới bớt người thật từ cuối danh sách.
+        const order = [...[...cur].reverse().filter(placeholder), ...[...cur].reverse().filter((p) => !placeholder(p))];
+        for (const p of order.slice(0, extra)) dropped.add(p.id);
+        set({ players: cur.filter((p) => !dropped.has(p.id)) });
+      },
       setCustomDeck: (customDeck) => set({ customDeck }),
       setupStep: 1,
       setSetupStep: (setupStep) => set({ setupStep }),
@@ -474,7 +504,7 @@ export const useGameStore = create<GameStore>()(
         set((s) => ({
           ...freshRound,
           gameState: "PASS_AND_PLAY",
-          players: balanceRoles(resetPlayers(s.players), s.customDeck, s.autoSeed),
+          players: balanceRoles(resetPlayers(s.players), s.customDeck, s.autoSeed, s.skill),
         })),
 
       markRevealed: (id) =>
@@ -536,27 +566,41 @@ export const useGameStore = create<GameStore>()(
           const harlot = players.find((p) => p.isAlive && p.roleId === "HARLOT");
           const harlotHost = !lost && harlot && a.HARLOT && a.HARLOT !== harlot.id ? alive(a.HARLOT) : undefined;
 
+          const biteOutcome: NightFacts["biteOutcome"] = {};
           for (const id of bites) {
             const p = alive(id);
             if (!p) continue;
-            if (harlotHost && id === harlot?.id) continue; // cắn vào nhà trống
-            if (!lost && id === a.GUARD) continue; // Bảo vệ che
-            if (!lost && id === a.WITCH_SAVE) continue; // Phù thủy cứu
+            if (harlotHost && id === harlot?.id) {
+              biteOutcome[id] = "HARLOT_AWAY"; // cắn vào nhà trống
+              continue;
+            }
+            if (!lost && id === a.GUARD) {
+              biteOutcome[id] = "GUARDED"; // Bảo vệ che
+              continue;
+            }
+            if (!lost && id === a.WITCH_SAVE) {
+              biteOutcome[id] = "HEALED"; // Phù thủy cứu
+              continue;
+            }
             if (p.roleId === "ELDER" && !elderHit) {
               elderHit = true; // Già làng chịu được lần cắn đầu
+              biteOutcome[id] = "ELDER";
               continue;
             }
             if (a.WOLF_CURSE === id && !curseUsed && cursedWolfAlive && !isWolfRole(p.roleId)) {
               p.formerRoleId = p.roleId ?? undefined; // bị nguyền: hóa Sói thay vì chết
               p.roleId = "WOLF";
               curseUsed = true;
+              biteOutcome[id] = "CURSED";
               continue;
             }
+            biteOutcome[id] = "KILLED";
             kills.push([id, "BITE"]);
           }
           // Ngủ trúng nhà Sói, hoặc chủ nhà bị Sói cắn chết: Con điếm chết theo.
-          if (harlot && harlotHost && (isWolfRole(harlotHost.roleId) || kills.some(([id, c]) => id === harlotHost.id && c === "BITE")))
-            kills.push([harlot.id, "BITE"]);
+          const harlotDied =
+            !!harlot && !!harlotHost && (isWolfRole(harlotHost.roleId) || kills.some(([id, c]) => id === harlotHost.id && c === "BITE"));
+          if (harlot && harlotDied) kills.push([harlot.id, "BITE"]);
           if (a.WHITE_WOLF && alive(a.WHITE_WOLF)) kills.push([a.WHITE_WOLF, "WHITE_WOLF"]);
           if (!lost && a.WITCH_KILL) kills.push([a.WITCH_KILL, "POISON"]); // bình độc xuyên khiên
 
@@ -579,7 +623,27 @@ export const useGameStore = create<GameStore>()(
             elderPunishOf(s.houseRules) === "ANY" &&
             res.died.some((d) => (d.cause === "POISON" || d.cause === "KAMIKAZE") && players.find((p) => p.id === d.id)?.roleId === "ELDER");
 
+          const gameLog = [
+            ...s.gameLog,
+            ...logNight({
+              round: s.nightNumber,
+              before: s.players,
+              actions: a,
+              lost,
+              bites,
+              biteOutcome,
+              harlotHostId: harlotHost?.id,
+              harlotDied,
+              rammedId: ram,
+              foxFound: !lost && !s.foxPowerLost && a.FOX ? !foxMissed : null,
+              died: res.died,
+              wildTurnedId: res.wildChildTurnedId,
+              newLovers: cupidPair.length === 2 && !s.loverIds.length ? cupidPair : [],
+            }),
+          ];
+
           return {
+            gameLog,
             undoStack: pushUndo(s, `Gọi làng dậy sau đêm ${s.nightNumber}`),
             villagePowersLost: lost || elderByVillage,
             newWolfIds: res.wildChildTurnedId ? [res.wildChildTurnedId] : [],
@@ -615,6 +679,9 @@ export const useGameStore = create<GameStore>()(
 
       startNextNight: () =>
         set((s) => ({
+          gameLog: s.lynchedTodayId
+            ? s.gameLog
+            : [...s.gameLog, dayEntry(s.nightNumber, "Cãi nhau chán chê rồi đi ngủ, hôm nay không treo ai.", "info")],
           undoStack: pushUndo(s, `Sang đêm ${s.nightNumber + 1}`),
           gameState: "NIGHT",
           nightNumber: s.nightNumber + 1,
@@ -648,6 +715,7 @@ export const useGameStore = create<GameStore>()(
           s.accusedId
             ? {
                 undoStack: pushUndo(s, `Tha ${s.players.find((p) => p.id === s.accusedId)?.name ?? ""}`),
+                gameLog: [...s.gameLog, logSpare(s.nightNumber, s.players.find((p) => p.id === s.accusedId)!)],
                 sparedTodayIds: [...s.sparedTodayIds, s.accusedId],
                 accusedId: null,
                 accusedVia: null,
@@ -663,7 +731,14 @@ export const useGameStore = create<GameStore>()(
         // Thằng ngố bị treo lần đầu: lật bài, không chết.
         const undoStack = pushUndo(s, `Treo ${target.name}`);
         if (target.roleId === "IDIOT" && s.idiotRevealedId !== target.id) {
-          set({ undoStack, idiotRevealedId: target.id, lynchedTodayId: target.id, accusedId: null, accusedVia: null });
+          set({
+            undoStack,
+            gameLog: [...s.gameLog, ...logLynch(s.nightNumber, target, s.accusedVia === "ROULETTE", true, [], s.players)],
+            idiotRevealedId: target.id,
+            lynchedTodayId: target.id,
+            accusedId: null,
+            accusedVia: null,
+          });
           return;
         }
 
@@ -673,6 +748,7 @@ export const useGameStore = create<GameStore>()(
         const hunterId = !villagePowersLost ? res.hunterId : null;
         set({
           undoStack,
+          gameLog: [...s.gameLog, ...logLynch(s.nightNumber, target, s.accusedVia === "ROULETTE", false, res.died, s.players)],
           newWolfIds: res.wildChildTurnedId ? [...s.newWolfIds, res.wildChildTurnedId] : s.newWolfIds,
           players: res.players,
           lynchedTodayId: target.id,
@@ -702,6 +778,7 @@ export const useGameStore = create<GameStore>()(
           : null;
         set({
           undoStack: pushUndo(s, target ? `Thợ săn bắn ${target.name}` : "Thợ săn không bắn"),
+          gameLog: [...s.gameLog, logShot(s.nightNumber, hunter, target)],
           newWolfIds: res?.wildChildTurnedId ? [...s.newWolfIds, res.wildChildTurnedId] : s.newWolfIds,
           villagePowersLost:
             s.villagePowersLost || (elderPunishOf(s.houseRules) === "ANY" && target?.roleId === "ELDER"),
@@ -741,7 +818,7 @@ export const useGameStore = create<GameStore>()(
         set((s) => ({
           ...freshRound,
           gameState: "PASS_AND_PLAY",
-          players: balanceRoles(resetPlayers(s.players), s.customDeck, s.autoSeed),
+          players: balanceRoles(resetPlayers(s.players), s.customDeck, s.autoSeed, s.skill),
         })),
     }),
     {
@@ -751,6 +828,8 @@ export const useGameStore = create<GameStore>()(
       storage: createJSONStorage(() =>
         typeof window === "undefined" ? (undefined as unknown as Storage) : window.localStorage,
       ),
+      // Màn chào luôn hiện lại mỗi lần mở app (kể cả bản lưu cũ có onboarded: true).
+      merge: (persisted, current) => ({ ...current, ...(persisted as Partial<GameStore>), onboarded: false }),
       partialize: (s) => {
         const keep: Partial<GameStore> = {
           sessionTitle: s.sessionTitle,
@@ -758,8 +837,9 @@ export const useGameStore = create<GameStore>()(
           houseRules: s.houseRules,
           gameState: s.gameState,
           isSoundEnabled: s.isSoundEnabled,
-          onboarded: s.onboarded,
           customDeck: s.customDeck,
+          skill: s.skill,
+          theme: s.theme,
           autoSeed: s.autoSeed,
         };
         // Toàn bộ trạng thái ván (để tải lại trang không mất ván).

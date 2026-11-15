@@ -1,13 +1,24 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Minus, Plus, Scale, Shuffle, SlidersHorizontal } from "lucide-react";
 import Image from "next/image";
-import { cardImage, isWolfRole, ROLE_ORDER, ROLES, SPECIAL_ROLES, type RoleId } from "@/constants/roles";
+import { isWolfRole, ROLE_ORDER, ROLES, SPECIAL_ROLES, type RoleId } from "@/constants/roles";
 import { MIN_PLAYERS, useGameStore } from "@/store/gameStore";
-import { balanceVerdict, maxWolves, rebalance, resolveDeck, wolfTotal, type DeckConfig } from "@/utils/balancer";
+import {
+  balanceVerdict,
+  maxWolves,
+  rebalance,
+  resolveDeck,
+  SKILL_LEVELS,
+  wolfTotal,
+  type DeckConfig,
+  type DeckCounts,
+} from "@/utils/balancer";
 import { DeckSummary } from "../DeckSummary";
 import { BalanceMeter } from "./BalanceMeter";
+import { useArt } from "@/hooks/useArt";
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -34,11 +45,92 @@ const BLURB: Record<RoleId, string> = {
 
 /** Ảnh nhỏ của lá bài (hoặc ô trống cùng cỡ nếu vai chưa có ảnh). */
 function CardThumb({ id }: { id: RoleId }) {
-  const src = cardImage(id);
+  const src = useArt().card(id);
   return (
     <span className={`relative block h-[60px] w-11 shrink-0 overflow-hidden rounded-md ${src ? "" : "border border-dashed border-line"}`}>
       {src && <Image src={src} alt="" fill sizes="44px" className="object-cover" />}
     </span>
+  );
+}
+
+/**
+ * Bộ bài tự cân bằng hiện thành các lá bài nhỏ. Mỗi lần đổi bộ: một chồng bài úp xáo qua lại
+ * rồi chia ra từng lá, lật mặt.
+ */
+function ShuffleDeck({ counts, shuffleKey }: { counts: DeckCounts; shuffleKey: string }) {
+  const { card, art } = useArt();
+  const reduce = useReducedMotion();
+  // Lượt xáo đã xong cho bộ nào; khác bộ hiện tại nghĩa là đang xáo.
+  const [doneKey, setDoneKey] = useState<string | null>(null);
+  const shuffling = !reduce && doneKey !== shuffleKey;
+  const cards = ROLE_ORDER.flatMap((id) => Array.from({ length: counts[id] }, (_, k) => ({ id, key: `${id}-${k}` })));
+
+  // Mở bước bộ bài hoặc đổi bộ: xáo một lượt rồi chia.
+  useEffect(() => {
+    if (reduce) return;
+    navigator.vibrate?.([20, 40, 20, 40, 20]);
+    const t = setTimeout(() => setDoneKey(shuffleKey), 900);
+    return () => clearTimeout(t);
+  }, [shuffleKey, reduce]);
+
+  return (
+    <div className="relative mt-4 min-h-40">
+      <AnimatePresence mode="wait" initial={false}>
+        {shuffling ? (
+          <motion.div
+            key="stack"
+            className="relative mx-auto h-40 w-24"
+            exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.15 } }}
+            aria-label="Đang xáo bài"
+          >
+            {[0, 1, 2, 3, 4, 5].map((k) => (
+              <motion.span
+                key={k}
+                className="absolute inset-0"
+                initial={{ x: 0, rotate: 0 }}
+                animate={{
+                  x: [0, k % 2 ? 70 : -70, 0, k % 2 ? -50 : 50, 0],
+                  rotate: [0, k % 2 ? 14 : -14, 0, k % 2 ? -8 : 8, (k - 2.5) * 2],
+                  y: [0, -6 * (k % 3), 0, 4, -k * 1.5],
+                }}
+                transition={{ duration: 0.85, delay: k * 0.02, ease: "easeInOut" }}
+                style={{ zIndex: k }}
+              >
+                <Image src={art("card-back")} alt="" fill sizes="96px" className="rounded-md object-cover shadow-lg" />
+              </motion.span>
+            ))}
+          </motion.div>
+        ) : (
+          <motion.ul key={`deal-${shuffleKey}`} className="grid grid-cols-6 gap-1.5 sm:grid-cols-8">
+            {cards.map((c, i) => {
+              const src = card(c.id);
+              return (
+                <motion.li
+                  key={c.key}
+                  initial={reduce ? false : { opacity: 0, y: -60, x: 0, rotateY: 180, scale: 0.6 }}
+                  animate={{ opacity: 1, y: 0, rotateY: 0, scale: 1 }}
+                  transition={{ delay: i * 0.045, duration: 0.45, ease }}
+                  className="relative aspect-9/16 overflow-hidden rounded-md [transform-style:preserve-3d]"
+                  title={ROLES[c.id].name}
+                >
+                  {src && <Image src={src} alt={ROLES[c.id].name} fill sizes="64px" className="object-cover" />}
+                  <span
+                    className={`absolute inset-x-0 bottom-0 truncate bg-ink/80 px-0.5 py-0.5 text-center text-[9px] font-semibold leading-tight ${
+                      isWolfRole(c.id) ? "text-blood" : "text-bone"
+                    }`}
+                  >
+                    {ROLES[c.id].name}
+                  </span>
+                </motion.li>
+              );
+            })}
+          </motion.ul>
+        )}
+      </AnimatePresence>
+      <div className="mt-3">
+        <DeckSummary counts={counts} label="" size="sm" />
+      </div>
+    </div>
   );
 }
 
@@ -47,16 +139,18 @@ export function useCurrentDeck() {
   const playerCount = useGameStore((s) => s.players.length);
   const customDeck = useGameStore((s) => s.customDeck);
   const autoSeed = useGameStore((s) => s.autoSeed);
+  const skill = useGameStore((s) => s.skill);
   // Chưa đủ người thì xem trước theo số tối thiểu.
   const n = Math.max(playerCount, MIN_PLAYERS);
-  const counts = resolveDeck(n, customDeck, autoSeed);
-  return { n, counts, custom: customDeck !== null, playerCount };
+  const counts = resolveDeck(n, customDeck, autoSeed, skill);
+  return { n, counts, custom: customDeck !== null, playerCount, autoSeed, skill };
 }
 
 export function DeckEditor() {
   const setCustomDeck = useGameStore((s) => s.setCustomDeck);
   const rerollAutoDeck = useGameStore((s) => s.rerollAutoDeck);
-  const { n, counts, custom, playerCount } = useCurrentDeck();
+  const { n, counts, custom, playerCount, autoSeed, skill } = useCurrentDeck();
+  const setSkill = useGameStore((s) => s.setSkill);
 
   const current: DeckConfig = { WOLF: counts.WOLF };
   for (const id of SPECIAL_ROLES) current[id] = counts[id];
@@ -189,7 +283,7 @@ export function DeckEditor() {
                 className="mt-3 flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-bone text-ink"
               >
                 <Scale className="size-5" strokeWidth={2} />
-                <span className="font-display text-xl uppercase leading-none">Cân bằng giúp tôi</span>
+                <span className="font-display text-xl uppercase leading-[1.08]">Cân bằng giúp tôi</span>
               </motion.button>
             </div>
           </motion.div>
@@ -238,11 +332,24 @@ export function DeckEditor() {
             transition={{ duration: 0.2 }}
             className="mt-4"
           >
-            <DeckSummary counts={counts} label="" />
-            <p className="mt-3 text-sm leading-snug text-ash">
-              App chọn vai từ toàn bộ {ROLE_ORDER.length} vai sao cho hai phe ngang sức. Bàn càng đông càng nhiều vai lạ; bàn ít
-              người chỉ dùng vai dễ hiểu.
-            </p>
+            <div role="radiogroup" aria-label="Trình độ của nhóm" className="grid grid-cols-3 gap-1 rounded-2xl border border-line p-1">
+              {SKILL_LEVELS.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={skill === o.id}
+                  onClick={() => setSkill(o.id)}
+                  className={`h-12 rounded-xl font-mono text-[10px] uppercase tracking-[0.12em] transition-colors ${
+                    skill === o.id ? "bg-blood text-bone" : "text-ash active:text-bone"
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-sm leading-snug text-ash">{SKILL_LEVELS.find((o) => o.id === skill)?.hint}</p>
+            <ShuffleDeck counts={counts} shuffleKey={`${autoSeed}-${skill}-${n}`} />
             <div className="mt-3 grid grid-cols-2 gap-2">
               <motion.button
                 type="button"
