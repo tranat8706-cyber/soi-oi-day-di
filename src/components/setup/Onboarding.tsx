@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Eye, Gavel, Moon, Smartphone, Users } from "lucide-react";
+import { ArrowRight, Eye, Gavel, Lock, Moon, Smartphone, Users } from "lucide-react";
 import { MAX_PLAYERS, MIN_PLAYERS, useGameStore } from "@/store/gameStore";
-import { SKILL_LEVELS, type SkillLevel } from "@/utils/balancer";
+import { activeSkill, SKILL_LEVELS, type SkillLevel } from "@/utils/balancer";
+import { PRO_UNLOCKED } from "@/constants/pro";
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -67,7 +68,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   const [names, setNames] = useState<string[]>(() => players.map((p) => (/^Người \d+$/.test(p.name) ? "" : p.name)));
   const nameRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [count, setCount] = useState(() => (players.length >= MIN_PLAYERS ? players.length : 8));
-  const [level, setLevel] = useState<SkillLevel>(skill);
+  const [level, setLevel] = useState<SkillLevel>(() => activeSkill(skill));
   const [i, setI] = useState(0);
   const [dir, setDir] = useState(1);
   const last = i === SLIDES.length - 1;
@@ -308,28 +309,38 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
                     <div role="radiogroup" aria-label="Trình độ" className="mt-6 flex flex-col gap-3 pb-6">
                       {SKILL_LEVELS.map((o) => {
                         const on = level === o.id;
+                        const locked = o.pro && !PRO_UNLOCKED;
                         return (
                           <button
                             key={o.id}
                             type="button"
                             role="radio"
                             aria-checked={on}
-                            onClick={() => setLevel(o.id)}
+                            aria-disabled={locked}
+                            onClick={() => !locked && setLevel(o.id)}
                             className={`rounded-2xl border px-5 py-4 text-left transition-colors ${
-                              on ? "border-blood bg-blood/15" : "border-line active:bg-ink-2"
+                              locked ? "border-dashed border-line opacity-60" : on ? "border-blood bg-blood/15" : "border-line active:bg-ink-2"
                             }`}
                           >
                             <span className="flex items-center justify-between gap-3">
                               <span className="pt-[0.08em] font-display text-3xl uppercase leading-[1.18] text-bone">{o.label}</span>
-                              <span
-                                aria-hidden
-                                className={`grid size-6 shrink-0 place-items-center rounded-full border ${on ? "border-blood bg-blood" : "border-line"}`}
-                              >
-                                {on && <span className="size-2 rounded-full bg-bone" />}
-                              </span>
+                              {locked ? (
+                                <span className="flex shrink-0 items-center gap-1 rounded-full border border-[#f5c15a]/60 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.15em] text-[#f5c15a]">
+                                  <Lock className="size-3" strokeWidth={2.5} /> Pro
+                                </span>
+                              ) : (
+                                <span
+                                  aria-hidden
+                                  className={`grid size-6 shrink-0 place-items-center rounded-full border ${on ? "border-blood bg-blood" : "border-line"}`}
+                                >
+                                  {on && <span className="size-2 rounded-full bg-bone" />}
+                                </span>
+                              )}
                             </span>
                             <span className="mt-1 block text-sm leading-snug text-bone/75">{o.hint}</span>
-                            <span className="mt-2 block font-mono text-[10px] uppercase tracking-[0.15em] text-ash">{SKILL_EXAMPLE[o.id]}</span>
+                            <span className="mt-2 block font-mono text-[10px] uppercase tracking-[0.15em] text-ash">
+                              {locked ? "Có trong bản Pro · sắp ra mắt" : SKILL_EXAMPLE[o.id]}
+                            </span>
                           </button>
                         );
                       })}

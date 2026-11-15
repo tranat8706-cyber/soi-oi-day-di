@@ -4,12 +4,10 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { EyeOff } from "lucide-react";
 import type { Player } from "@/store/gameStore";
-import { useGameStore } from "@/store/gameStore";
 import Image from "next/image";
 import { getRole } from "@/constants/roles";
 import { ROLE_QUIPS } from "@/constants/quips";
 import { useArt } from "@/hooks/useArt";
-import { playThud } from "@/utils/audio";
 
 const ease = [0.22, 1, 0.36, 1] as const;
 const BLOOD_FLASH = "#991B1B";
@@ -96,7 +94,6 @@ export function RoleReveal({ player, onCancel, onDone }: Props) {
   const { card: cardOf, art } = useArt();
   const card = cardOf(player.roleId);
   const isWolf = role?.team === "WOLVES";
-  const isSoundEnabled = useGameStore((s) => s.isSoundEnabled);
   const reduceMotion = useReducedMotion();
 
   const [flipped, setFlipped] = useState(false);
@@ -132,11 +129,8 @@ export function RoleReveal({ player, onCancel, onDone }: Props) {
 
   const flip = () => {
     if (flipped) return;
-    // Rung + âm thanh phải chạy đồng bộ trong cử chỉ chạm.
-    if (fx) {
-      navigator.vibrate?.(fx.vibrate);
-      if (isSoundEnabled) playThud();
-    }
+    // Chỉ rung (người cầm máy mới biết), không phát tiếng để cả bàn khỏi nghe ra ai là Sói.
+    if (fx) navigator.vibrate?.(fx.vibrate);
     setFlipped(true);
   };
 

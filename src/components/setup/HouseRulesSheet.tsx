@@ -218,7 +218,7 @@ export function HouseRulesList({ compact = false }: { compact?: boolean }) {
     <div className="border-t border-line">
               {RULES.filter((r) => MAIN_RULES.includes(r.key)).map(row)}
               <Segmented
-                title="Khi hòa phiếu"
+                title="Khi treo giàn mà hòa phiếu"
                 options={TIE_OPTIONS}
                 value={houseRules.tieRule ?? "ROULETTE"}
                 onChange={(v) => setHouseRule("tieRule", v)}

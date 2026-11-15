@@ -1,3 +1,4 @@
+import { PRO_UNLOCKED } from "@/constants/pro";
 import { isWolfRole, ROLE_ORDER, SPECIAL_ROLES, type RoleId, type SpecialRoleId } from "@/constants/roles";
 
 /** Số nguyên ngẫu nhiên trong [0, max), dùng crypto nếu có để khó đoán hơn Math.random. */
@@ -114,11 +115,33 @@ const AUTO_MIN: Partial<Record<SpecialRoleId, number>> = {
 /** Trình độ của nhóm: quyết định bộ tự cân bằng dùng vai dễ hay vai khó. */
 export type SkillLevel = "NEWBIE" | "MIXED" | "PRO";
 
-export const SKILL_LEVELS: { id: SkillLevel; label: string; hint: string }[] = [
-  { id: "NEWBIE", label: "Có người mới", hint: "Chỉ dùng vai dễ hiểu, ít luật lắt léo. Ván đầu tiên nên chọn cái này." },
-  { id: "MIXED", label: "Đều biết chơi", hint: "Trộn vai quen với vài vai lạ, bàn càng đông càng nhiều vai lạ." },
-  { id: "PRO", label: "Trùm ma sói", hint: "Dồn vai khó, ít Dân thường, Sói đặc biệt xuất hiện nhiều. Cãi nhau mệt nghỉ." },
+export const SKILL_LEVELS: { id: SkillLevel; label: string; short: string; hint: string; pro: boolean }[] = [
+  {
+    id: "NEWBIE",
+    label: "Tấm chiếu mới",
+    short: "Chiếu mới",
+    hint: "Có đứa lần đầu chơi, chưa trải sự đời. Vai dễ hiểu, luật đơn giản, nghe một lần là chơi được.",
+    pro: false,
+  },
+  {
+    id: "MIXED",
+    label: "Chơi có số má",
+    short: "Có số má",
+    hint: "Ai cũng từng chơi vài ván. Trộn vai quen với vai lạ, bàn càng đông càng nhiều twist.",
+    pro: false,
+  },
+  {
+    id: "PRO",
+    label: "Trùm cuối server",
+    short: "Trùm cuối",
+    hint: "Dồn vai khó, ít Dân thường, Sói đặc biệt ra liên tục. Cãi nhau tới sáng, đứt cả dây thanh quản.",
+    pro: true,
+  },
 ];
+
+/** Trình độ thực sự dùng: Trùm cuối thuộc bản Pro, chưa mở thì chia như "Chơi có số má". */
+export const activeSkill = (level: SkillLevel | undefined): SkillLevel =>
+  level === "PRO" && !PRO_UNLOCKED ? "MIXED" : (level ?? "MIXED");
 
 /** Vai cho bàn có người mới: phép đơn giản, ai nghe một lần cũng hiểu. */
 const NEWBIE_OK = new Set<SpecialRoleId>(["GUARD", "WITCH", "HUNTER", "IDIOT", "ELDER", "LYCAN", "WOLF_CUB"]);
@@ -253,7 +276,8 @@ export function rebalance(
  * cho hợp lệ (số người thay đổi sau khi chỉnh thì không bị vỡ).
  * Tổng bầy Sói (kể cả Sói đặc biệt) luôn ít hơn nửa bàn.
  */
-export function resolveDeck(n: number, custom: DeckConfig | null, seed = 1, level: SkillLevel = "MIXED"): DeckCounts {
+export function resolveDeck(n: number, custom: DeckConfig | null, seed = 1, rawLevel: SkillLevel = "MIXED"): DeckCounts {
+  const level = activeSkill(rawLevel);
   return resolveCounts(n, custom ?? autoDeck(n, seed, level));
 }
 

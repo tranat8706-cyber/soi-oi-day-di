@@ -1,4 +1,5 @@
 import { ROLES } from "./roles";
+import { PRO_UNLOCKED } from "./pro";
 
 export type ThemeId = "classic" | "chibi" | "sexy";
 
@@ -38,8 +39,8 @@ export const THEMES: Record<ThemeId, Theme> = {
 
 export const THEME_ORDER: ThemeId[] = ["classic", "chibi", "sexy"];
 
-/** Chưa có cổng thanh toán: bộ hình Pro vẫn khóa. */
-export const PRO_THEMES_UNLOCKED = false;
+/** Bộ hình Pro mở theo cờ chung của bản Pro. */
+export const PRO_THEMES_UNLOCKED = PRO_UNLOCKED;
 
 /** Bộ hình thực sự dùng: bộ Pro chưa mở thì quay về Truyền thống. */
 export const activeTheme = (id: ThemeId | undefined): Theme => {

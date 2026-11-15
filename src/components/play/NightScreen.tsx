@@ -187,13 +187,15 @@ export function NightScreen() {
     setToast({ id: toastSeq.current, message });
   };
 
-  /** Chọn xong thì cuộn tới kết quả + nút Xong của bước đang mở. */
-  const scrollToDone = () => {
+  /** Cuộn tới một phần tử trong bước đang mở. */
+  const scrollTo = (selector: string) => {
     if (!openId) return;
     setTimeout(() => {
-      stepRefs.current[openId]?.querySelector("[data-step-done]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      stepRefs.current[openId]?.querySelector(selector)?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 120);
   };
+  /** Chọn xong thì cuộn tới kết quả + nút Xong của bước đang mở. */
+  const scrollToDone = () => scrollTo("[data-step-done]");
 
   /** Kết quả soi của Tiên tri / Sói tiên tri / Cáo khi chọn một người. */
   const resultFor = (key: NightActionKey, id: string | undefined): Flash | null => {
@@ -227,7 +229,13 @@ export function NightScreen() {
     }
     // Bước còn lựa chọn phụ (Phù thủy 2 bình, Sói cắn người thứ hai) thì không cuộn đi.
     const pendingSecondBite = key === "WOLF" && s.cubRevenge && !nightActions.WOLF_2;
+    if (target && pendingSecondBite) scrollTo("[data-bite2]");
     if (target && !key.startsWith("WITCH") && key !== "WOLF_CURSE" && !pendingSecondBite) scrollToDone();
+    // Phù thủy đã xong cả hai bình (chọn đêm nay hoặc dùng từ trước) thì cuộn tới nút Xong.
+    if (key.startsWith("WITCH")) {
+      const pick = (k: NightActionKey) => (k === key ? !!target : !!nightActions[k]);
+      if ((pick("WITCH_SAVE") || s.witchHealUsed) && (pick("WITCH_KILL") || s.witchPoisonUsed)) scrollToDone();
+    }
   };
 
   /** Thần tình yêu: chọn đủ 2 người. */
@@ -281,6 +289,7 @@ export function NightScreen() {
     if (s.villagePowersLost && VILLAGE_POWERS.includes(rid)) return "elder";
     if (rid === "FOX" && s.foxPowerLost) return "fox";
     if (rid === "KAMIKAZE" && s.kamikazeUsed) return "used";
+    if (rid === "WITCH" && s.witchHealUsed && s.witchPoisonUsed) return "potions";
     return null;
   };
 
@@ -700,7 +709,9 @@ export function NightScreen() {
                         ? "Chưa chọn · chạm để chọn hoặc bấm không dùng"
                         : blocked === "dead"
                         ? "Đã chết · vẫn gọi để giữ bí mật"
-                        : blocked
+                        : blocked === "potions"
+                          ? "Hết cả 2 bình · vẫn gọi để giữ bí mật"
+                          : blocked
                           ? "Mất phép · vẫn gọi để giữ bí mật"
                           : (summary ??
                             `${holders.filter((p) => p.isAlive).map((p) => p.name).join(", ") || "Không ai"} · chưa chọn${
@@ -756,6 +767,8 @@ export function NightScreen() {
                                 ? "Cáo đã đánh hơi trượt một lần nên mất phép."
                                 : blocked === "used"
                                   ? "Kẻ cảm tử đã lao vào một lần."
+                                  : blocked === "potions"
+                                    ? "Phù thủy đã dùng hết bình cứu và bình độc, đêm nay không làm gì được."
                                   : "Già làng đã chết dưới tay phe Làng nên vai này mất phép."}{" "}
                             Vẫn đọc lời gọi, chờ vài giây rồi qua bước tiếp, để không ai đoán được.
                           </p>
@@ -768,8 +781,8 @@ export function NightScreen() {
                             type="button"
                             onClick={() => (skips.includes(rid) ? s.setNightSkip(rid, false) : skipStep(rid, next?.id ?? null))}
                             aria-pressed={skips.includes(rid)}
-                            className={`mt-5 flex min-h-14 w-full items-center justify-center rounded-xl border border-dashed font-mono text-[11px] uppercase tracking-[0.18em] transition-colors ${
-                              skips.includes(rid) ? "border-bone/60 bg-ink text-bone" : "border-line text-ash active:text-bone"
+                            className={`mt-5 flex min-h-14 w-full items-center justify-center rounded-xl border font-mono text-[11px] uppercase tracking-[0.18em] transition-colors ${
+                              skips.includes(rid) ? "border-bone bg-bone/15 text-bone" : "border-dashed border-bone/45 bg-ink-2 text-bone/90 active:bg-bone/10"
                             }`}
                           >
                             {skips.includes(rid) ? `Đã chọn: ${SKIP_LABEL[rid] ?? "không dùng"} · chạm để bỏ` : (SKIP_LABEL[rid] ?? "Đêm nay không dùng")}
@@ -879,7 +892,7 @@ interface Flash {
 /** Tiêu đề lượt cắn khi Sói con báo thù: tách rõ lần 1 và lần 2. */
 function BiteHeader({ n, name }: { n: 1 | 2; name?: string }) {
   return (
-    <div className="mt-6 flex items-center gap-3">
+    <div className="mt-6 flex scroll-mt-4 items-center gap-3" data-bite2={n === 2 ? "" : undefined}>
       <span className="rounded-lg bg-blood px-3 pb-1.5 pt-2 font-display text-2xl uppercase leading-[1.1] text-bone">Cắn lần {n}</span>
       <span className="truncate font-mono text-[10px] uppercase tracking-[0.18em] text-ash">{name ? `Đã chọn ${name}` : "Chưa chọn"}</span>
     </div>
@@ -1111,6 +1124,9 @@ function WitchStep({
           >
             Phù thủy muốn giết ai? Mở danh sách
           </button>
+        )}
+        {!poisonUsed && !killed && (
+          <p className="mt-2 text-sm leading-snug text-ash">Không giết ai thì để trống, bấm nút Xong bên dưới là qua bước.</p>
         )}
       </section>
 

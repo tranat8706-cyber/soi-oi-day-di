@@ -1,8 +1,9 @@
 "use client";
 
+import { PRO_UNLOCKED } from "@/constants/pro";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Info, Minus, Plus, Scale, Shuffle, SlidersHorizontal } from "lucide-react";
+import { Info, Lock, Minus, Plus, Scale, Shuffle, SlidersHorizontal } from "lucide-react";
 import Image from "next/image";
 import { isWolfRole, ROLE_ORDER, ROLES, SPECIAL_ROLES, type RoleId } from "@/constants/roles";
 import { MIN_PLAYERS, useGameStore } from "@/store/gameStore";
@@ -12,6 +13,7 @@ import {
   rebalance,
   resolveDeck,
   SKILL_LEVELS,
+  activeSkill,
   wolfTotal,
   type DeckConfig,
   type DeckCounts,
@@ -65,6 +67,9 @@ function ShuffleDeck({ counts, shuffleKey }: { counts: DeckCounts; shuffleKey: s
   const [info, setInfo] = useState<RoleId | null>(null);
   const shuffling = !reduce && doneKey !== shuffleKey;
   const cards = ROLE_ORDER.flatMap((id) => Array.from({ length: counts[id] }, (_, k) => ({ id, key: `${id}-${k}` })));
+  // Phe Sói trước, rồi phe Làng, mỗi vai một dòng kèm số lượng.
+  const kinds = ROLE_ORDER.filter((id) => counts[id] > 0).sort((x, y) => Number(isWolfRole(y)) - Number(isWolfRole(x)));
+  const wolfCount = cards.filter((c) => isWolfRole(c.id)).length;
 
   // Mở bước bộ bài hoặc đổi bộ: xáo một lượt rồi chia.
   useEffect(() => {
@@ -102,38 +107,48 @@ function ShuffleDeck({ counts, shuffleKey }: { counts: DeckCounts; shuffleKey: s
             ))}
           </motion.div>
         ) : (
-          <motion.ul key={`deal-${shuffleKey}`} className="grid grid-cols-6 gap-1.5 sm:grid-cols-8">
-            {cards.map((c, i) => {
-              const src = card(c.id);
-              return (
-                <motion.li
-                  key={c.key}
-                  onClick={() => setInfo(c.id)}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`Xem chức năng ${ROLES[c.id].name}`}
-                  onKeyDown={(e) => e.key === "Enter" && setInfo(c.id)}
-                  initial={reduce ? false : { opacity: 0, y: -60, x: 0, rotateY: 180, scale: 0.6 }}
-                  animate={{ opacity: 1, y: 0, rotateY: 0, scale: 1 }}
-                  transition={{ delay: i * 0.045, duration: 0.45, ease }}
-                  className="relative aspect-9/16 cursor-pointer overflow-hidden rounded-md [transform-style:preserve-3d] active:scale-95"
-                  title={ROLES[c.id].name}
-                >
-                  {src && <Image src={src} alt={ROLES[c.id].name} fill sizes="64px" className="object-cover" />}
-                  <span
-                    className={`absolute inset-x-0 bottom-0 truncate bg-ink/80 px-0.5 py-0.5 text-center text-[9px] font-semibold leading-tight ${
-                      isWolfRole(c.id) ? "text-blood" : "text-bone"
-                    }`}
+          <motion.div key={`deal-${shuffleKey}`}>
+            {/* Tóm tắt nhanh để Quản trò đọc to cho cả bàn */}
+            <p className="pt-[0.1em] font-display text-3xl uppercase leading-[1.15] text-bone">
+              {cards.length} lá · <span className="text-blood">{wolfCount} Sói</span> · {cards.length - wolfCount} Làng
+            </p>
+            <ul className="mt-3 grid grid-cols-1 gap-2 min-[400px]:grid-cols-2">
+              {kinds.map((id, i) => {
+                const src = card(id);
+                const wolf = isWolfRole(id);
+                return (
+                  <motion.li
+                    key={id}
+                    initial={reduce ? false : { opacity: 0, y: -24, rotateY: 90 }}
+                    animate={{ opacity: 1, y: 0, rotateY: 0 }}
+                    transition={{ delay: i * 0.06, duration: 0.4, ease }}
                   >
-                    {ROLES[c.id].name}
-                  </span>
-                </motion.li>
-              );
-            })}
-          </motion.ul>
+                    <button
+                      type="button"
+                      onClick={() => setInfo(id)}
+                      aria-label={`Xem chức năng ${ROLES[id].name}`}
+                      className={`flex h-16 w-full items-center gap-3 rounded-xl border pl-1.5 pr-3 text-left active:scale-[0.98] ${
+                        wolf ? "border-blood/50 bg-blood/10" : "border-line bg-ink-2"
+                      }`}
+                    >
+                      <span className="relative h-13 w-[1.85rem] shrink-0 overflow-hidden rounded-md">
+                        {src && <Image src={src} alt="" fill sizes="32px" className="object-cover" />}
+                      </span>
+                      <span className={`min-w-0 flex-1 truncate pt-[0.1em] font-display text-2xl uppercase leading-[1.1] ${wolf ? "text-blood" : "text-bone"}`}>
+                        {ROLES[id].name}
+                      </span>
+                      <span className="shrink-0 font-display text-2xl tabular-nums leading-none text-bone">
+                        {counts[id] > 1 ? `×${counts[id]}` : ""}
+                      </span>
+                    </button>
+                  </motion.li>
+                );
+              })}
+            </ul>
+          </motion.div>
         )}
       </AnimatePresence>
-      <p className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-ash">Chạm vào lá bài để xem chức năng</p>
+      <p className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-ash">Chạm vào vai để xem chức năng</p>
       <RoleInfoSheet id={info} onClose={() => setInfo(null)} />
     </div>
   );
@@ -347,22 +362,31 @@ export function DeckEditor() {
             className="mt-4"
           >
             <div role="radiogroup" aria-label="Trình độ của nhóm" className="grid grid-cols-3 gap-1 rounded-2xl border border-line p-1">
-              {SKILL_LEVELS.map((o) => (
-                <button
-                  key={o.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={skill === o.id}
-                  onClick={() => setSkill(o.id)}
-                  className={`h-12 rounded-xl font-mono text-[10px] uppercase tracking-[0.12em] transition-colors ${
-                    skill === o.id ? "bg-blood text-bone" : "text-ash active:text-bone"
-                  }`}
-                >
-                  {o.label}
-                </button>
-              ))}
+              {SKILL_LEVELS.map((o) => {
+                const locked = o.pro && !PRO_UNLOCKED;
+                const on = activeSkill(skill) === o.id;
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    disabled={locked}
+                    onClick={() => setSkill(o.id)}
+                    className={`flex h-12 items-center justify-center gap-1 rounded-xl font-mono text-[10px] uppercase tracking-[0.12em] transition-colors ${
+                      on ? "bg-blood text-bone" : locked ? "text-ash/50" : "text-ash active:text-bone"
+                    }`}
+                  >
+                    {locked && <Lock className="size-3" strokeWidth={2.5} />}
+                    {o.short}
+                  </button>
+                );
+              })}
             </div>
-            <p className="mt-2 text-sm leading-snug text-ash">{SKILL_LEVELS.find((o) => o.id === skill)?.hint}</p>
+            <p className="mt-2 text-sm leading-snug text-ash">
+              {SKILL_LEVELS.find((o) => o.id === activeSkill(skill))?.hint}
+              {!PRO_UNLOCKED && <span className="text-[#f5c15a]"> Trùm cuối server có trong bản Pro.</span>}
+            </p>
             {/* Nút xáo đặt ngay trên bộ bài, to và sáng để cả bàn thấy. */}
             <motion.button
               type="button"

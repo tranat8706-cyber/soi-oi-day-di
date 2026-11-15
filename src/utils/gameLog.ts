@@ -365,8 +365,9 @@ export function verdict(log: LogEntry[], winner: string | null, nights: number):
         worst = e;
       }
     }
-    let p = `Ván kéo dài ${nights} đêm, mở đầu sau đêm 1 ở thế ${first.w} Sói : ${first.v} Làng và khép lại ở ${last.w} : ${last.v}.`;
-    if (worst && gap <= 2 && winner !== "WOLF") p += ` Thời điểm làng nguy nhất là sau ${when(worst).toLowerCase()}, chỉ hơn bầy Sói ${gap} người.`;
+    let p = `${nights} đêm drama. Mở màn ${first.w} Sói đấu ${first.v} Làng, chốt sổ ${last.w} : ${last.v}.`;
+    if (worst && gap <= 2 && winner !== "WOLF")
+      p += ` Sau ${when(worst).toLowerCase()} làng run cầm cập, chỉ hơn Sói đúng ${gap} mạng. Tim ai yếu là xỉu.`;
     paragraphs.push(p);
   }
 
@@ -377,38 +378,39 @@ export function verdict(log: LogEntry[], winner: string | null, nights: number):
   const villageKills = count("POISON_WOLF", "SHOT_WOLF", "RAM_WOLF");
   const friendlyFire = count("POISON_WRONG", "SHOT_WRONG", "RAM_WRONG");
   const village: string[] = [];
-  if (lynchWolf + lynchWrong) village.push(`treo đúng ${lynchWolf} Sói, treo nhầm ${lynchWrong} người phe mình`);
-  if (seerHits) village.push(`Tiên tri soi trúng Sói ${seerHits} lần`);
-  if (saves) village.push(`cứu thoát ${saves} cú cắn`);
-  if (villageKills) village.push(`hạ thêm ${villageKills} Sói bằng phép ban đêm hoặc súng`);
-  if (friendlyFire) village.push(`tự bắn nhầm phe ${friendlyFire} lần`);
-  if (village.length) paragraphs.push(`Phe Làng: ${village.join(", ")}.`);
+  if (lynchWolf) village.push(`treo trúng ${lynchWolf} Sói (mắt diều hâu)`);
+  if (lynchWrong) village.push(`treo oan ${lynchWrong} người nhà (xin lỗi các bạn)`);
+  if (seerHits) village.push(`Tiên tri soi trúng ${seerHits} phát`);
+  if (saves) village.push(`cứu kịp ${saves} cú cắn`);
+  if (villageKills) village.push(`xử thêm ${villageKills} Sói bằng bình độc, súng hoặc bom`);
+  if (friendlyFire) village.push(`tự bắn nhầm đồng đội ${friendlyFire} lần, hơi cay`);
+  if (village.length) paragraphs.push(`Team Làng: ${village.join(", ")}.`);
 
   const keyKills = log.filter((e) => e.tag === "KEY_KILL");
   const wolves: string[] = [];
-  if (keyKills.length) wolves.push(`cắn trúng ${keyKills.length} vai chủ chốt (${keyKills.map(when).join(", ").toLowerCase()})`);
-  if (count("CURSE")) wolves.push("nguyền thêm được đồng bọn");
-  if (count("WOLF_SEER_KEY")) wolves.push(`Sói tiên tri lộ mặt ${count("WOLF_SEER_KEY")} vai phép`);
-  if (count("SPARE_WOLF")) wolves.push(`được làng tha ${count("SPARE_WOLF")} lần`);
-  if (wolves.length) paragraphs.push(`Phe Sói: ${wolves.join(", ")}.`);
+  if (keyKills.length) wolves.push(`táp trúng ${keyKills.length} vai xịn (${keyKills.map(when).join(", ").toLowerCase()})`);
+  if (count("CURSE")) wolves.push("nguyền thêm được đồng bọn mà làng không hay");
+  if (count("WOLF_SEER_KEY")) wolves.push(`Sói tiên tri bóc mặt ${count("WOLF_SEER_KEY")} vai phép`);
+  if (count("SPARE_WOLF")) wolves.push(`được làng tha ${count("SPARE_WOLF")} lần vì… quá tin người`);
+  if (wolves.length) paragraphs.push(`Team Sói: ${wolves.join(", ")}.`);
 
   let close: string;
   if (winner === "WOLF")
     close =
       lynchWrong > lynchWolf
-        ? "Làng thua vì treo nhầm nhiều hơn treo đúng: mỗi lần treo oan là tự giúp Sói thêm một mạng."
+        ? "Làng thua vì treo oan nhiều hơn treo trúng. Mỗi lần treo nhầm là tự tay ship chiến thắng cho Sói. Ván sau bớt cảm tính nha."
         : keyKills.length
-          ? "Làng thua vì mất các vai phép quá sớm: không còn ai soi và che, ban ngày chỉ còn đoán mò."
-          : "Bầy Sói giữ bài kín tới cuối, làng không kịp lật được đủ Sói.";
+          ? "Mất vai xịn quá sớm, cả làng chuyển sang chế độ đoán mò. Sói đi dạo nhẹ nhàng như đi chợ."
+          : "Bầy Sói diễn sâu như phim giờ vàng, làng không kịp bóc phốt. Respect.";
   else if (winner === "VILLAGER")
     close =
       lynchWolf > 0 && lynchWrong === 0
-        ? "Làng thắng gọn: lần nào treo cũng trúng Sói, không phí một lá phiếu."
+        ? "Làng thắng kiểu sạch sẽ: treo phát nào trúng phát đó, không phí lá phiếu nào. Sói nhìn mà khóc."
         : saves + seerHits > 0
-          ? "Làng thắng nhờ các vai phép làm tròn việc: soi ra Sói và giữ được người qua những đêm khó."
-          : "Làng thắng sát nút, có lúc chênh vênh nhưng vẫn lật được bầy Sói.";
-  else if (winner === "LOVERS") close = "Cặp đôi khác phe đi tới cuối cùng: cả làng lẫn bầy Sói đều bị qua mặt.";
-  else if (winner === "WHITE_WOLF") close = "Sói trắng diễn tròn vai, đứng một mình trên đống đổ nát của cả hai phe.";
+          ? "Các vai phép gánh team cực mạnh: soi đúng người, cứu đúng lúc. Teamwork makes the dream work."
+          : "Thắng sát nút, tim đập chân run, nhưng thắng là thắng. GG cả làng!";
+  else if (winner === "LOVERS") close = "Tình yêu vượt qua tất cả, kể cả cả làng lẫn bầy Sói. Couple này xứng đáng được làm phim.";
+  else if (winner === "WHITE_WOLF") close = "Sói trắng solo cả server, đâm sau lưng luôn đồng bọn mà vẫn ung dung. Đỉnh của chóp.";
   else close = "";
   if (close) paragraphs.push(close);
 

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { RotateCcw, ThumbsDown, ThumbsUp } from "lucide-react";
+import { RotateCcw, Settings2, ThumbsDown, ThumbsUp } from "lucide-react";
 import { getRole } from "@/constants/roles";
 import { useGameStore, type Player, type Winner } from "@/store/gameStore";
 import { StepBack } from "./StepBack";
@@ -57,6 +57,7 @@ export function RecapScreen() {
   const trollTitles = useGameStore((s) => s.trollTitles);
   const rematch = useGameStore((s) => s.rematch);
   const backToSetup = useGameStore((s) => s.backToSetup);
+  const setOnboarded = useGameStore((s) => s.setOnboarded);
   const [date] = useState(() =>
     new Date().toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }),
   );
@@ -186,13 +187,21 @@ export function RecapScreen() {
           <span className="font-display text-[clamp(1.4rem,6vw,1.9rem)] uppercase leading-[1.08]">Chơi ván mới với nhóm này</span>
           <RotateCcw className="size-7 shrink-0" strokeWidth={2} />
         </motion.button>
-        <button
+        <motion.button
           type="button"
-          onClick={backToSetup}
-          className="mb-2 mt-1 min-h-16 w-full font-mono text-[11px] uppercase tracking-[0.2em] text-ash active:text-bone"
+          onClick={() => {
+            setOnboarded(false);
+            backToSetup();
+          }}
+          whileTap={{ scale: 0.97 }}
+          className="mb-4 mt-3 flex h-20 w-full items-center justify-between rounded-2xl border-2 border-bone/40 px-6 text-bone active:bg-ink-2"
         >
-          Về màn chuẩn bị
-        </button>
+          <span className="text-left">
+            <span className="block pt-[0.1em] font-display text-[clamp(1.4rem,6vw,1.9rem)] uppercase leading-[1.08]">Set up lại từ đầu</span>
+            <span className="block font-mono text-[10px] uppercase tracking-[0.18em] text-ash">Đổi số người, tên, trình độ</span>
+          </span>
+          <Settings2 className="size-7 shrink-0" strokeWidth={2} />
+        </motion.button>
       </div>
     </div>
   );
@@ -375,7 +384,7 @@ function GameDiary({ players, winner, nights }: { players: Player[]; winner: Win
 
       {(v.paragraphs.length > 0 || v.turning.length > 0) && (
         <div className="mt-4 rounded-2xl border border-bone/25 bg-ink-2 px-5 py-5">
-          <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-ash">Nhận xét tổng ván</p>
+          <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-ash">Tổng kết ván · nói nhanh cho vui</p>
           <div className="mt-3 flex flex-col gap-3">
             {v.paragraphs.map((t, i) => (
               <p key={i} className="text-[15px] leading-relaxed text-bone/90">
@@ -385,7 +394,7 @@ function GameDiary({ players, winner, nights }: { players: Player[]; winner: Win
           </div>
           {v.turning.length > 0 && (
             <>
-              <p className="mt-5 font-mono text-[10px] uppercase tracking-[0.25em] text-ash">Bước ngoặt · đêm trước kéo theo đêm sau</p>
+              <p className="mt-5 font-mono text-[10px] uppercase tracking-[0.25em] text-ash">Khoảnh khắc lật kèo</p>
               <ol className="mt-3 flex flex-col gap-3">
                 {v.turning.map((t, i) => (
                   <li key={i} className="border-l-2 border-blood pl-3">
