@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, Eye, Gavel, Moon, Smartphone, Users } from "lucide-react";
 import { MAX_PLAYERS, MIN_PLAYERS, useGameStore } from "@/store/gameStore";
@@ -56,13 +56,16 @@ const SKILL_EXAMPLE: Record<SkillLevel, string> = {
  */
 export function Onboarding({ onDone }: { onDone: () => void }) {
   const players = useGameStore((st) => st.players);
-  const setPlayerCount = useGameStore((st) => st.setPlayerCount);
+  const seatPlayers = useGameStore((st) => st.seatPlayers);
   const skill = useGameStore((st) => st.skill);
   const setSkill = useGameStore((st) => st.setSkill);
   const setCustomDeck = useGameStore((st) => st.setCustomDeck);
   const setSetupStep = useGameStore((st) => st.setSetupStep);
 
-  const [phase, setPhase] = useState<"guide" | "count" | "skill">("guide");
+  const [phase, setPhase] = useState<"guide" | "count" | "names" | "skill">("guide");
+  // Tên đã có (bỏ tên tạm) để người cũ khỏi gõ lại.
+  const [names, setNames] = useState<string[]>(() => players.map((p) => (/^Người \d+$/.test(p.name) ? "" : p.name)));
+  const nameRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [count, setCount] = useState(() => (players.length >= MIN_PLAYERS ? players.length : 8));
   const [level, setLevel] = useState<SkillLevel>(skill);
   const [i, setI] = useState(0);
@@ -79,7 +82,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   };
 
   const finish = () => {
-    setPlayerCount(count);
+    seatPlayers(Array.from({ length: count }, (_, i) => names[i] ?? ""));
     setSkill(level);
     setCustomDeck(null); // để app chia theo trình độ vừa chọn
     setSetupStep(1);
@@ -120,7 +123,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
               ))
             ) : (
               <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">
-                Câu hỏi {phase === "count" ? "1" : "2"}/2
+                Câu hỏi {phase === "count" ? "1" : phase === "names" ? "2" : "3"}/3
               </span>
             )}
           </div>
@@ -235,6 +238,58 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
                       ))}
                     </div>
                   </motion.div>
+                ) : phase === "names" ? (
+                  <motion.div
+                    key="names"
+                    initial={{ opacity: 0, x: 40 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -40 }}
+                    transition={{ duration: 0.35, ease }}
+                    className="pt-6"
+                  >
+                    <h2 className="pt-[0.08em] font-display text-[clamp(2.75rem,13vw,4.5rem)] uppercase leading-[1.18] text-bone">
+                      Ai đang
+                      <br />
+                      ngồi đây<span className="text-blood">?</span>
+                    </h2>
+                    <p className="mt-3 text-base leading-snug text-ash">
+                      Gõ tên <span className="text-bone">theo vòng ngồi</span>, bắt đầu từ người bên trái bạn. Có tên thì gọi dậy, bỏ phiếu khỏi nhầm.
+                      Lười thì để trống, app đặt tên tạm.
+                    </p>
+                    <ol className="mt-5 flex flex-col gap-2 pb-6">
+                      {Array.from({ length: count }, (_, i) => (
+                        <li key={i} className="flex items-center gap-3">
+                          <span className="w-7 shrink-0 text-right font-mono text-xs tabular-nums text-ash">{String(i + 1).padStart(2, "0")}</span>
+                          <input
+                            ref={(el) => {
+                              nameRefs.current[i] = el;
+                            }}
+                            value={names[i] ?? ""}
+                            onChange={(e) =>
+                              setNames((cur) => {
+                                const next = [...cur];
+                                next[i] = e.target.value;
+                                return next;
+                              })
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+                              e.preventDefault();
+                              const nxt = nameRefs.current[i + 1];
+                              if (nxt) nxt.focus();
+                              else e.currentTarget.blur();
+                            }}
+                            placeholder={`Người ${i + 1}`}
+                            aria-label={`Tên người ngồi chỗ ${i + 1}`}
+                            autoComplete="off"
+                            autoCapitalize="words"
+                            enterKeyHint={i === count - 1 ? "done" : "next"}
+                            className="h-14 min-w-0 flex-1 rounded-xl border border-line bg-ink-2 px-4 text-lg text-bone outline-none placeholder:text-ash/40 focus:border-bone"
+                          />
+                        </li>
+                      ))}
+                    </ol>
+                  </motion.div>
                 ) : (
                   <motion.div
                     key="skill"
@@ -288,14 +343,14 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
               <div className="flex gap-3 pb-4 pt-2">
                 <button
                   type="button"
-                  onClick={() => (phase === "skill" ? setPhase("count") : setPhase("guide"))}
+                  onClick={() => setPhase(phase === "skill" ? "names" : phase === "names" ? "count" : "guide")}
                   className="h-20 rounded-2xl border border-line px-6 font-mono text-xs uppercase tracking-[0.2em] text-ash active:text-bone"
                 >
                   Lùi
                 </button>
                 <motion.button
                   type="button"
-                  onClick={() => (phase === "count" ? setPhase("skill") : finish())}
+                  onClick={() => (phase === "count" ? setPhase("names") : phase === "names" ? setPhase("skill") : finish())}
                   whileTap={{ scale: 0.97 }}
                   className={`flex h-20 flex-1 items-center justify-between rounded-2xl px-6 ${
                     phase === "skill" ? "bg-blood text-bone" : "bg-bone text-ink"

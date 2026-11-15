@@ -16,7 +16,7 @@ import {
 import { countRoles } from "@/utils/balancer";
 import { foxGroup } from "@/utils/rules";
 import { DeckSummary } from "../DeckSummary";
-import { PlayerList } from "./PlayerList";
+import { PlayerList, type SelectFx } from "./PlayerList";
 import { StepBack } from "./StepBack";
 import { useArt } from "@/hooks/useArt";
 import { UndoToast, type ToastData } from "./UndoToast";
@@ -50,6 +50,39 @@ const stepChosen = (rid: NightRoleId, a: NightActions) =>
 
 /** Luật "Bắt buộc dùng": các vai này phải chọn mỗi đêm. Phù thủy, Kẻ cảm tử, Sói trắng luôn được bỏ qua. */
 const REQUIRED: NightRoleId[] = ["CUPID", "WILD_CHILD", "HARLOT", "GUARD", "WOLF", "WOLF_SEER", "SEER", "FOX"];
+
+/** Hiệu ứng khi chạm chọn người ở từng bước. */
+const FX_OF: Partial<Record<NightActionKey, SelectFx>> = {
+  WOLF: "claw",
+  WOLF_2: "claw",
+  WHITE_WOLF: "claw",
+  GUARD: "shield",
+  SEER: "eye",
+  WOLF_SEER: "eye",
+  FOX: "nose",
+  HARLOT: "home",
+  KAMIKAZE: "bomb",
+  WILD_CHILD: "star",
+};
+
+/** Câu Quản trò đọc thêm để nhắc vai này có quyền không dùng phép đêm nay. */
+const OPTIONAL_SAY: Partial<Record<NightRoleId, string>> = {
+  WOLF: "Sói có thể không cắn ai đêm nay.",
+  GUARD: "Bảo vệ có thể không che ai. Không được che một người hai đêm liền.",
+  SEER: "Tiên tri có thể không soi đêm nay.",
+  WOLF_SEER: "Sói tiên tri có thể không soi đêm nay.",
+  FOX: "Cáo có thể nghỉ một đêm, không đánh hơi.",
+  HARLOT: "Con điếm có thể ở nhà, không ngủ cùng ai. Không được ngủ một nhà hai đêm liền.",
+  WITCH: "Phù thủy có thể không dùng bình nào. Mỗi bình chỉ dùng một lần cả ván.",
+  KAMIKAZE: "Kẻ cảm tử có thể để dành, chưa lao vào ai đêm nay.",
+  WHITE_WOLF: "Sói trắng có thể tha cho đồng bọn đêm nay.",
+  WILD_CHILD: "Đứa trẻ hoang chọn một người làm thần tượng.",
+};
+
+/** Luật cần nhắc riêng, đọc mọi đêm bất kể luật nhà. */
+const RULE_SAY: Partial<Record<NightRoleId, string>> = {
+  FOX: "Cáo chỉ vào 1 người: tôi xét người đó và 2 người ngồi hai bên. Nếu cả 3 không có Sói, Cáo mất phép từ đêm sau.",
+};
 
 /** Chữ trên nút bỏ qua theo từng vai. */
 const SKIP_LABEL: Partial<Record<NightRoleId, string>> = {
@@ -262,6 +295,7 @@ export function NightScreen() {
     selectedId: nightActions[key],
     onSelect: (p: Player) => choose(key, nightActions[key] === p.id && key !== "WOLF" && key !== "GUARD" && key !== "SEER" ? null : p),
     disabledReason: disabled,
+    selectFx: FX_OF[key],
   });
 
   const stepBody = (role: Role) => {
@@ -274,7 +308,7 @@ export function NightScreen() {
           <>
             <Label>Chọn 2 người yêu nhau · {ids.length}/2</Label>
             <div className="mt-2">
-              <PlayerList players={players} showRoles selectedIds={ids} onSelect={toggleLover} />
+              <PlayerList players={players} showRoles selectedIds={ids} onSelect={toggleLover} selectFx="heart" />
             </div>
           </>
         );
@@ -637,6 +671,17 @@ export function NightScreen() {
                         <p className="border-l-2 border-blood pl-4 text-xl leading-relaxed text-bone/85">
                           “<RoleText text={role.gmInstruction} />”
                         </p>
+                        {(RULE_SAY[rid] || (OPTIONAL_SAY[rid] && canSkip(rid))) && !blocked && (
+                          <div className="mt-3 rounded-xl border border-bone/20 bg-ink px-4 py-3">
+                            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-ash">Quản trò nói thêm</p>
+                            {canSkip(rid) && OPTIONAL_SAY[rid] && (
+                              <p className="mt-1 text-lg leading-snug text-bone">“<RoleText text={OPTIONAL_SAY[rid]!} />”</p>
+                            )}
+                            {RULE_SAY[rid] && (
+                              <p className="mt-1 text-lg leading-snug text-bone">“<RoleText text={RULE_SAY[rid]!} />”</p>
+                            )}
+                          </div>
+                        )}
                         {role.id === "WOLF" && holders.some((p) => p.roleId !== "WOLF") && (
                           <p className="mt-3 text-sm leading-snug text-ash">
                             Cả bầy cùng dậy:{" "}
@@ -900,6 +945,7 @@ function WitchStep({
               showRoles
               selectedId={actions.WITCH_KILL}
               onSelect={(p) => onChoose("WITCH_KILL", actions.WITCH_KILL === p.id ? null : p)}
+              selectFx="poison"
               disabledReason={(p) => (p.roleId === "WITCH" ? "Không tự đầu độc" : null)}
             />
           </div>

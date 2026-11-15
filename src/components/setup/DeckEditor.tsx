@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Minus, Plus, Scale, Shuffle, SlidersHorizontal } from "lucide-react";
+import { Info, Minus, Plus, Scale, Shuffle, SlidersHorizontal } from "lucide-react";
 import Image from "next/image";
 import { isWolfRole, ROLE_ORDER, ROLES, SPECIAL_ROLES, type RoleId } from "@/constants/roles";
 import { MIN_PLAYERS, useGameStore } from "@/store/gameStore";
@@ -16,9 +16,9 @@ import {
   type DeckConfig,
   type DeckCounts,
 } from "@/utils/balancer";
-import { DeckSummary } from "../DeckSummary";
 import { BalanceMeter } from "./BalanceMeter";
 import { useArt } from "@/hooks/useArt";
+import { RoleInfoSheet } from "../RoleInfoSheet";
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -62,6 +62,7 @@ function ShuffleDeck({ counts, shuffleKey }: { counts: DeckCounts; shuffleKey: s
   const reduce = useReducedMotion();
   // Lượt xáo đã xong cho bộ nào; khác bộ hiện tại nghĩa là đang xáo.
   const [doneKey, setDoneKey] = useState<string | null>(null);
+  const [info, setInfo] = useState<RoleId | null>(null);
   const shuffling = !reduce && doneKey !== shuffleKey;
   const cards = ROLE_ORDER.flatMap((id) => Array.from({ length: counts[id] }, (_, k) => ({ id, key: `${id}-${k}` })));
 
@@ -107,10 +108,15 @@ function ShuffleDeck({ counts, shuffleKey }: { counts: DeckCounts; shuffleKey: s
               return (
                 <motion.li
                   key={c.key}
+                  onClick={() => setInfo(c.id)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Xem chức năng ${ROLES[c.id].name}`}
+                  onKeyDown={(e) => e.key === "Enter" && setInfo(c.id)}
                   initial={reduce ? false : { opacity: 0, y: -60, x: 0, rotateY: 180, scale: 0.6 }}
                   animate={{ opacity: 1, y: 0, rotateY: 0, scale: 1 }}
                   transition={{ delay: i * 0.045, duration: 0.45, ease }}
-                  className="relative aspect-9/16 overflow-hidden rounded-md [transform-style:preserve-3d]"
+                  className="relative aspect-9/16 cursor-pointer overflow-hidden rounded-md [transform-style:preserve-3d] active:scale-95"
                   title={ROLES[c.id].name}
                 >
                   {src && <Image src={src} alt={ROLES[c.id].name} fill sizes="64px" className="object-cover" />}
@@ -127,9 +133,8 @@ function ShuffleDeck({ counts, shuffleKey }: { counts: DeckCounts; shuffleKey: s
           </motion.ul>
         )}
       </AnimatePresence>
-      <div className="mt-3">
-        <DeckSummary counts={counts} label="" size="sm" />
-      </div>
+      <p className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-ash">Chạm vào lá bài để xem chức năng</p>
+      <RoleInfoSheet id={info} onClose={() => setInfo(null)} />
     </div>
   );
 }
@@ -151,6 +156,7 @@ export function DeckEditor() {
   const rerollAutoDeck = useGameStore((s) => s.rerollAutoDeck);
   const { n, counts, custom, playerCount, autoSeed, skill } = useCurrentDeck();
   const setSkill = useGameStore((s) => s.setSkill);
+  const [info, setInfo] = useState<RoleId | null>(null);
 
   const current: DeckConfig = { WOLF: counts.WOLF };
   for (const id of SPECIAL_ROLES) current[id] = counts[id];
@@ -190,13 +196,21 @@ export function DeckEditor() {
     const wolfish = isWolfRole(id);
     return (
       <li key={id} className="flex min-h-20 items-center gap-3 border-b border-line py-2">
-        <CardThumb id={id} />
-        <span className="min-w-0 flex-1">
-          <span className={`flex items-center gap-2 text-lg font-medium ${wolfish ? "text-blood" : "text-bone"}`}>
-            {ROLES[id].name}
+        <button
+          type="button"
+          onClick={() => setInfo(id)}
+          aria-label={`Xem chức năng ${ROLES[id].name}`}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left active:opacity-70"
+        >
+          <CardThumb id={id} />
+          <span className="min-w-0 flex-1">
+            <span className={`flex items-center gap-2 text-lg font-medium ${wolfish ? "text-blood" : "text-bone"}`}>
+              {ROLES[id].name}
+              <Info className="size-4 shrink-0 text-ash" strokeWidth={1.75} />
+            </span>
+            <span className="mt-0.5 block text-sm leading-snug text-ash">{fixed ? "Tự động = số người còn lại." : BLURB[id]}</span>
           </span>
-          <span className="mt-0.5 block text-sm leading-snug text-ash">{fixed ? "Tự động = số người còn lại." : BLURB[id]}</span>
-        </span>
+        </button>
         {fixed ? (
           <span className="w-16 text-center font-display text-3xl tabular-nums text-bone/70">{counts.VILLAGER}</span>
         ) : (
@@ -349,26 +363,25 @@ export function DeckEditor() {
               ))}
             </div>
             <p className="mt-2 text-sm leading-snug text-ash">{SKILL_LEVELS.find((o) => o.id === skill)?.hint}</p>
+            {/* Nút xáo đặt ngay trên bộ bài, to và sáng để cả bàn thấy. */}
+            <motion.button
+              type="button"
+              whileTap={{ scale: 0.96, rotate: -1 }}
+              onClick={rerollAutoDeck}
+              className="mt-4 flex h-16 w-full items-center justify-center gap-3 rounded-2xl bg-bone text-ink"
+            >
+              <Shuffle className="size-6" strokeWidth={2} />
+              <span className="pt-[0.1em] font-display text-2xl uppercase leading-[1.08]">Xáo bộ khác</span>
+            </motion.button>
             <ShuffleDeck counts={counts} shuffleKey={`${autoSeed}-${skill}-${n}`} />
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <motion.button
-                type="button"
-                whileTap={{ scale: 0.97 }}
-                onClick={rerollAutoDeck}
-                className="flex h-14 items-center justify-center gap-2 rounded-xl border border-line text-bone active:bg-ink-2"
-              >
-                <Shuffle className="size-4" strokeWidth={1.75} />
-                <span className="font-mono text-[11px] uppercase tracking-[0.18em]">Đổi bộ khác</span>
-              </motion.button>
-              <button
-                type="button"
-                onClick={() => setCustomDeck(current)}
-                className="flex h-14 items-center justify-center gap-2 rounded-xl border border-line text-bone active:bg-ink-2"
-              >
-                <SlidersHorizontal className="size-4" strokeWidth={1.75} />
-                <span className="font-mono text-[11px] uppercase tracking-[0.18em]">Sửa bộ này</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setCustomDeck(current)}
+              className="mt-3 flex h-14 w-full items-center justify-center gap-2 rounded-xl border border-line text-bone active:bg-ink-2"
+            >
+              <SlidersHorizontal className="size-4" strokeWidth={1.75} />
+              <span className="font-mono text-[11px] uppercase tracking-[0.18em]">Sửa bộ này bằng tay</span>
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -382,6 +395,7 @@ export function DeckEditor() {
             {w}
           </p>
         ))}
+      <RoleInfoSheet id={info} onClose={() => setInfo(null)} />
     </div>
   );
 }

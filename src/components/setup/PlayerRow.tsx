@@ -35,9 +35,13 @@ export function PlayerRow({ player, index }: Props) {
     }
   };
 
+  // Tên tạm "Người 3" hiện thành ô trống có gợi ý, để Quản trò thấy ngay chỗ cần điền.
+  const temp = /^Người \d+$/.test(player.name);
+  const shown = temp ? "" : player.name;
+
   const commitName = (el: HTMLInputElement) => {
     const next = el.value.trim();
-    if (!next) el.value = player.name;
+    if (!next) el.value = shown;
     else if (next !== player.name) renamePlayer(player.id, next);
   };
 
@@ -83,17 +87,22 @@ export function PlayerRow({ player, index }: Props) {
 
       <input
         key={player.name}
-        defaultValue={player.name}
+        defaultValue={shown}
+        placeholder={`${player.name} · điền tên`}
         aria-label={`Tên người chơi ${index + 1}`}
         onBlur={(e) => commitName(e.currentTarget)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.nativeEvent.isComposing) e.currentTarget.blur();
           if (e.key === "Escape") {
-            e.currentTarget.value = player.name;
+            e.currentTarget.value = shown;
             e.currentTarget.blur();
           }
         }}
-        className="h-16 min-w-0 flex-1 bg-transparent text-xl font-medium text-bone outline-none focus:text-white"
+        autoComplete="off"
+        autoCapitalize="words"
+        className={`h-14 min-w-0 flex-1 rounded-xl border px-3 text-xl font-medium text-bone outline-none placeholder:text-base placeholder:font-normal placeholder:text-ash/60 focus:border-bone ${
+          temp ? "border-dashed border-ash/50 bg-ink-2" : "border-transparent bg-transparent focus:bg-ink-2"
+        }`}
       />
 
       <button

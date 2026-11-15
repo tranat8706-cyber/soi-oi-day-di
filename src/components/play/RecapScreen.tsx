@@ -3,10 +3,11 @@
 import { useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, ThumbsDown, ThumbsUp } from "lucide-react";
 import { getRole } from "@/constants/roles";
 import { useGameStore, type Player, type Winner } from "@/store/gameStore";
 import { StepBack } from "./StepBack";
+import { ShareStory } from "./ShareStory";
 import { useArt } from "@/hooks/useArt";
 import type { ArtName } from "@/constants/themes";
 import { awards, type LogEntry } from "@/utils/gameLog";
@@ -25,13 +26,17 @@ const WIN_LOOK: Record<Winner, { top: string; text: string; glow: string; size: 
   WHITE_WOLF: { top: "Sói trắng", text: "text-bone", glow: "bg-bone/20", size: "text-[14cqw]", art: "win-white-wolf" },
 };
 
+/** Màu chủ đạo của ảnh Story theo phe thắng. */
+const STORY_ACCENT: Record<Winner, string> = { WOLF: "#e2464b", VILLAGER: "#5fbf8a", LOVERS: "#e968a5", WHITE_WOLF: "#ece7dd" };
+
 /** Lệch nhẹ cho mỗi tấm polaroid, cố định theo vị trí. */
 const tilt = (i: number) => (((i * 37) % 7) - 3) * 0.9;
 
 function cols(n: number) {
+  // Đủ nhỏ để bức tường ảnh không đè lên tên ván.
   if (n <= 4) return 2;
-  if (n <= 9) return 3;
-  if (n <= 16) return 4;
+  if (n <= 6) return 3;
+  if (n <= 12) return 4;
   return 5;
 }
 
@@ -138,6 +143,28 @@ export function RecapScreen() {
           </div>
         </div>
       </motion.section>
+
+      <div className="mt-5 w-full px-safe">
+        <ShareStory
+          data={() => {
+            const log = useGameStore.getState().gameLog;
+            const { best, worst } = awards(log);
+            const nm = (id?: string) => players.find((p) => p.id === id)?.name ?? "?";
+            return {
+              winnerLabel: look.top,
+              accent: STORY_ACCENT[winner ?? "VILLAGER"],
+              artSrc: art(look.art),
+              title: sessionTitle.trim(),
+              date,
+              nights: nightNumber,
+              players: players.map((p) => ({ ...p, lover: loverIds.includes(p.id) })),
+              log,
+              best: best && { name: nm(best[0]), count: best[1] },
+              worst: worst && { name: nm(worst[0]), count: worst[1] },
+            };
+          }}
+        />
+      </div>
 
       <GameDiary players={players} />
 
@@ -250,41 +277,42 @@ function Polaroid({
   );
 }
 
-const TONE: Record<LogEntry["tone"], { tag: string; cls: string } | null> = {
-  good: { tag: "Chơi hay quá ta", cls: "bg-moss/20 text-moss" },
-  bad: { tag: "Chơi dở ẹc", cls: "bg-blood/20 text-blood" },
-  info: null,
-};
-
-/** Nhật ký từ đêm 1 tới hết ván, kèm giải hay nhất / dở nhất. */
+/** Nhật ký từ đêm 1 tới hết ván: chuyện gì xảy ra, ảnh hưởng ra sao tới các đêm sau, cục diện sau mỗi chặng. */
 function GameDiary({ players }: { players: Player[] }) {
   const log = useGameStore((s) => s.gameLog);
+  const votes = useGameStore((s) => s.logVotes);
+  const voteLog = useGameStore((s) => s.voteLog);
   if (!log.length) return null;
   const { best, worst } = awards(log);
   const nameOf = (id?: string) => players.find((p) => p.id === id)?.name;
   // Gom theo từng chặng: Đêm 1, Ngày 1, Đêm 2…
-  const chapters: { key: string; title: string; items: LogEntry[] }[] = [];
-  for (const e of log) {
+  const chapters: { key: string; title: string; items: { e: LogEntry; i: number }[] }[] = [];
+  log.forEach((e, i) => {
     const key = `${e.phase}-${e.round}`;
     let ch = chapters.at(-1);
     if (!ch || ch.key !== key) {
       ch = { key, title: `${e.phase === "NIGHT" ? "Đêm" : "Ngày"} ${e.round}`, items: [] };
       chapters.push(ch);
     }
-    ch.items.push(e);
-  }
-  const goods = log.filter((e) => e.tone === "good").length;
-  const bads = log.filter((e) => e.tone === "bad").length;
+    ch.items.push({ e, i });
+  });
+  const likes = Object.values(votes).filter((v) => v === 1).length;
+  const unlikes = Object.values(votes).filter((v) => v === -1).length;
 
   return (
     <section className="mt-10 w-full px-safe" aria-label="Nhật ký ván">
-      <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">Nhật ký ván · đêm 1 tới hạ màn</p>
+      <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">Phân tích ván · đêm 1 tới hạ màn</p>
       <h2 className="mt-2 pt-[0.1em] font-display text-[clamp(2.5rem,12vw,4rem)] uppercase leading-[1.18] text-bone">
         Ván này ra sao<span className="text-blood">?</span>
       </h2>
       <p className="mt-2 text-sm leading-snug text-ash">
-        {goods} pha hay, {bads} pha dở.{" "}
-        {bads > goods ? "Cả bàn nên đi học lại." : goods > bads * 2 ? "Bàn này toàn cao thủ." : "Có hay có dở, vậy mới vui."}
+        Mỗi pha kèm hệ quả cho các đêm sau. Cả bàn cùng chấm: pha nào đỉnh thì like, pha nào muốn quên thì unlike.
+        {(likes > 0 || unlikes > 0) && (
+          <span className="text-bone">
+            {" "}
+            {likes} like · {unlikes} unlike.
+          </span>
+        )}
       </p>
 
       {(best || worst) && (
@@ -308,30 +336,73 @@ function GameDiary({ players }: { players: Player[] }) {
 
       <ol className="mt-6 border-l border-line">
         {chapters.map((ch) => (
-          <li key={ch.key} className="relative pb-6 pl-5">
+          <li key={ch.key} className="relative pb-7 pl-5">
             <span
               aria-hidden
               className={`absolute -left-[5px] top-1.5 size-[9px] rounded-full ${ch.key.startsWith("NIGHT") ? "bg-blood" : "bg-bone"}`}
             />
             <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-bone">{ch.title}</p>
-            <ul className="mt-2 flex flex-col gap-2.5">
-              {ch.items.map((e, i) => {
-                const tone = TONE[e.tone];
-                return (
-                  <li key={i} className="text-[15px] leading-snug text-bone/85">
-                    {e.text}
-                    {tone && (
-                      <span className={`ml-2 inline-block whitespace-nowrap rounded-md px-1.5 py-0.5 align-middle text-[11px] font-semibold ${tone.cls}`}>
-                        {tone.tag}
-                      </span>
-                    )}
+            <ul className="mt-3 flex flex-col gap-4">
+              {ch.items.map(({ e, i }) =>
+                e.tone === "status" ? (
+                  <li key={i}>
+                    <StatusBar entry={e} />
                   </li>
-                );
-              })}
+                ) : (
+                  <li key={i}>
+                    <p className="text-[15px] leading-snug text-bone">{e.text}</p>
+                    {e.impact && <p className="mt-1 text-[13px] leading-snug text-ash">→ {e.impact}</p>}
+                    <div className="mt-1.5 flex gap-1">
+                      {([1, -1] as const).map((v) => {
+                        const on = votes[i] === v;
+                        const Icon = v === 1 ? ThumbsUp : ThumbsDown;
+                        return (
+                          <motion.button
+                            key={v}
+                            type="button"
+                            whileTap={{ scale: 1.3 }}
+                            onClick={() => voteLog(i, v)}
+                            aria-pressed={on}
+                            aria-label={v === 1 ? "Like pha này" : "Unlike pha này"}
+                            className={`grid size-10 place-items-center rounded-full border transition-colors ${
+                              on ? (v === 1 ? "border-moss bg-moss/20 text-moss" : "border-blood bg-blood/20 text-blood") : "border-line text-ash"
+                            }`}
+                          >
+                            <Icon className="size-4" strokeWidth={2} fill={on ? "currentColor" : "none"} />
+                          </motion.button>
+                        );
+                      })}
+                    </div>
+                  </li>
+                ),
+              )}
             </ul>
           </li>
         ))}
       </ol>
     </section>
+  );
+}
+
+/** Thanh cục diện: tỉ lệ Sói / Làng còn sống sau một chặng. */
+function StatusBar({ entry }: { entry: LogEntry }) {
+  const m = entry.text.match(/Còn (\d+) Sói · (\d+) Làng/);
+  const wolves = Number(m?.[1] ?? 0);
+  const village = Number(m?.[2] ?? 0);
+  const total = Math.max(1, wolves + village);
+  return (
+    <div className="rounded-xl border border-line bg-ink-2 px-3 py-3">
+      <p className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.2em]">
+        <span className="text-ash">Cục diện</span>
+        <span>
+          <span className="text-blood">{wolves} Sói</span> <span className="text-ash">·</span> <span className="text-moss">{village} Làng</span>
+        </span>
+      </p>
+      <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-line">
+        <span className="bg-blood" style={{ width: `${(wolves / total) * 100}%` }} />
+        <span className="bg-moss" style={{ width: `${(village / total) * 100}%` }} />
+      </div>
+      {entry.impact && <p className="mt-2 text-[13px] leading-snug text-bone/80">{entry.impact}</p>}
+    </div>
   );
 }

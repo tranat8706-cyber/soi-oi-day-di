@@ -100,6 +100,10 @@ export function computeWinner(players: readonly RulePlayer[], loverIds: readonly
   const pack = alive.filter((p) => isWolfRole(p.roleId) && p.roleId !== "WHITE_WOLF").length;
   // Sói trắng chỉ thắng khi là người sống cuối cùng.
   if (white && alive.length === 1) return "WHITE_WOLF";
+  // Sói trắng một mình đấu 1 dân: dân không treo nổi, đêm tới Sói trắng thắng.
+  if (white && pack === 0 && alive.length === 2) return "WHITE_WOLF";
+  // Bầy (kể cả Sói trắng) đông bằng phần còn lại: làng hết đường, bầy thắng luôn.
+  if (white && pack > 0 && pack + 1 >= alive.length - pack - 1) return "WOLF";
   if (!white && pack === 0) return "VILLAGER";
   if (!white && pack >= alive.length - pack) return "WOLF";
   return null;

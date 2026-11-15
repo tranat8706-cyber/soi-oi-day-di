@@ -134,9 +134,11 @@ export function DayScreen() {
     lynch();
   };
 
+  // Tha xong là hết ngày: đi ngủ luôn (lùi lại được nếu lỡ tay).
   const onSpare = () => {
     setConfirmHang(false);
     spare();
+    startNextNight();
   };
 
   const deck = countRoles(players);
@@ -735,27 +737,38 @@ function TrialPanel({
         </blockquote>
       </div>
 
-      {/* Đồng hồ bào chữa */}
-      <button
+      {/* Đồng hồ bào chữa: chưa bấm thì nhấp nháy nhắc Quản trò. */}
+      {deadline === null && (
+        <p className="mt-8 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-blood">
+          <span className="relative flex size-2.5">
+            <span className="absolute inline-flex size-full animate-ping rounded-full bg-blood opacity-75" />
+            <span className="relative inline-flex size-2.5 rounded-full bg-blood" />
+          </span>
+          Bước 1 · Đọc xong câu trên thì bấm đồng hồ
+        </p>
+      )}
+      <motion.button
         type="button"
         onClick={startTimer}
-        className={`mt-8 flex h-24 w-full items-center justify-between rounded-2xl border px-6 transition-colors ${
-          over ? "border-blood bg-blood/15" : running ? "border-bone/40 bg-ink-2" : "border-line"
+        animate={deadline === null ? { boxShadow: ["0 0 0 0 rgba(195,22,28,0.6)", "0 0 0 10px rgba(195,22,28,0)"] } : { boxShadow: "0 0 0 0 rgba(0,0,0,0)" }}
+        transition={deadline === null ? { duration: 1.4, repeat: Infinity } : { duration: 0.2 }}
+        className={`flex h-24 w-full items-center justify-between rounded-2xl border px-6 transition-colors ${deadline === null ? "mt-3" : "mt-8"} ${
+          over ? "border-blood bg-blood/15" : running ? "border-bone/40 bg-ink-2" : "border-blood bg-blood/10"
         }`}
       >
         <span className="text-left">
-          <span className="block font-mono text-[10px] uppercase tracking-[0.25em] text-ash">
-            {over ? "Hết giờ · chạm để bấm lại" : running ? "Đang bào chữa" : "Bấm giờ bào chữa"}
+          <span className={`block font-mono text-[10px] uppercase tracking-[0.25em] ${deadline === null ? "text-bone" : "text-ash"}`}>
+            {over ? "Hết giờ · chạm để bấm lại" : running ? "Đang bào chữa" : "Chạm để bấm 60 giây bào chữa"}
           </span>
           <span className={`block font-display text-5xl tabular-nums leading-none ${over ? "text-blood" : "text-bone"}`}>
             0:{pad(running || over ? left : DEFENSE_SECONDS)}
           </span>
         </span>
-        <Timer className={`size-8 ${running ? "animate-pulse text-bone" : "text-ash"}`} strokeWidth={1.5} />
-      </button>
+        <Timer className={`size-8 ${running ? "animate-pulse text-bone" : deadline === null ? "text-blood" : "text-ash"}`} strokeWidth={1.5} />
+      </motion.button>
 
       <div className="mt-8 rounded-2xl border border-line bg-ink-2 px-4 py-4 text-[15px] leading-snug text-bone/85">
-        <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-ash">Biểu quyết lần cuối</p>
+        <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-ash">Bước 2 · Biểu quyết lần cuối</p>
         <p className="mt-2 flex items-baseline gap-2">
           <span className="font-display text-5xl leading-none tabular-nums text-bone">{need}</span>
           <span className="text-ash">/ {voters} phiếu là treo</span>

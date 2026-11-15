@@ -4,7 +4,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { isWolfRole, looksLikeWolf } from "@/constants/roles";
 import { assignRoles as balanceRoles, type DeckConfig, type SkillLevel } from "@/utils/balancer";
 import type { ThemeId } from "@/constants/themes";
-import { dayEntry, logLynch, logNight, logShot, logSpare, type LogEntry, type NightFacts } from "@/utils/gameLog";
+import { dayEntry, logLynch, logNight, logShot, logSpare, statusEntry, type LogEntry, type NightFacts } from "@/utils/gameLog";
 import {
   applyDeaths,
   computeWinner,
@@ -123,6 +123,8 @@ interface GameStore {
   setTheme: (v: ThemeId) => void;
   /** Đặt đúng n chỗ ngồi: thiếu thì thêm tên tạm, thừa thì bớt từ cuối (ưu tiên bớt tên tạm). */
   setPlayerCount: (n: number) => void;
+  /** Xếp chỗ theo danh sách tên (theo vòng ngồi). Tên rỗng hoặc trùng thì dùng tên tạm "Người i". Giữ ảnh của người cũ cùng chỗ. */
+  seatPlayers: (names: string[]) => void;
   setOnboarded: (v: boolean) => void;
   /** Bộ bài tự chọn; null = tự cân bằng theo số người. */
   customDeck: DeckConfig | null;
@@ -194,6 +196,9 @@ interface GameStore {
   /** Đứa trẻ hoang vừa hóa Sói, quản trò cần báo cho họ ở đêm kế tiếp. */
   newWolfIds: string[];
   gameLog: LogEntry[];
+  logVotes: Record<number, 1 | -1>;
+  /** Bấm lại cùng nút thì bỏ chọn. */
+  voteLog: (index: number, v: 1 | -1) => void;
   /** Các bước lớn (gọi làng dậy, treo, tha, bắn, sang đêm) để quản trò lùi lại khi lỡ tay. */
   undoStack: UndoEntry[];
   /** Lùi lại bước lớn gần nhất. */
@@ -271,6 +276,8 @@ const freshRound = {
   newWolfIds: [] as string[],
   /** Nhật ký cả ván cho màn tổng kết. */
   gameLog: [] as LogEntry[],
+  /** Like (1) / unlike (-1) cho từng dòng nhật ký, theo vị trí dòng. */
+  logVotes: {} as Record<number, 1 | -1>,
   undoStack: [] as UndoEntry[],
   pendingHunterId: null as string | null,
   hunterShotId: null as string | null,
@@ -439,10 +446,41 @@ export const useGameStore = create<GameStore>()(
       customDeck: null,
 
       setOnboarded: (onboarded) => set({ onboarded }),
+      voteLog: (index, v) =>
+        set((s) => {
+          const logVotes = { ...s.logVotes };
+          if (logVotes[index] === v) delete logVotes[index];
+          else logVotes[index] = v;
+          return { logVotes };
+        }),
       skill: "MIXED",
       setSkill: (skill) => set({ skill }),
       theme: "classic",
       setTheme: (theme) => set({ theme }),
+      seatPlayers: (names) =>
+        set((s) => {
+          const list = names.slice(0, MAX_PLAYERS);
+          const taken = new Set<string>();
+          const clean = list.map((raw) => {
+            const n = normalize(raw);
+            const key = n.toLocaleLowerCase("vi");
+            if (!n || taken.has(key)) return "";
+            taken.add(key);
+            return n;
+          });
+          let k = 1;
+          const tempName = () => {
+            while (taken.has(`người ${k}`)) k++;
+            taken.add(`người ${k}`);
+            return `Người ${k++}`;
+          };
+          const players = clean.map((name, i) => {
+            const old = s.players[i];
+            const finalName = name || tempName();
+            return old ? { ...old, name: finalName } : { id: newId(), name: finalName, roleId: null, isAlive: true };
+          });
+          return { players };
+        }),
       setPlayerCount: (n) => {
         const target = Math.min(MAX_PLAYERS, Math.max(MIN_PLAYERS, n));
         const cur = get().players;
@@ -628,6 +666,7 @@ export const useGameStore = create<GameStore>()(
             ...logNight({
               round: s.nightNumber,
               before: s.players,
+              after: res.players,
               actions: a,
               lost,
               bites,
@@ -679,9 +718,20 @@ export const useGameStore = create<GameStore>()(
 
       startNextNight: () =>
         set((s) => ({
-          gameLog: s.lynchedTodayId
-            ? s.gameLog
-            : [...s.gameLog, dayEntry(s.nightNumber, "Cãi nhau chán chê rồi đi ngủ, hôm nay không treo ai.", "info")],
+          gameLog: [
+            ...s.gameLog,
+            ...(s.lynchedTodayId || s.sparedTodayIds.length
+              ? []
+              : [
+                  dayEntry(
+                    s.nightNumber,
+                    "Cãi nhau chán chê rồi đi ngủ, hôm nay không treo ai.",
+                    "info",
+                    "Mất một ngày: Sói được thêm một đêm cắn mà không phải trả giá.",
+                  ),
+                ]),
+            statusEntry(s.nightNumber, "DAY", s.players),
+          ],
           undoStack: pushUndo(s, `Sang đêm ${s.nightNumber + 1}`),
           gameState: "NIGHT",
           nightNumber: s.nightNumber + 1,

@@ -1,6 +1,6 @@
 import { ROLES } from "./roles";
 
-export type ThemeId = "classic" | "sexy";
+export type ThemeId = "classic" | "chibi" | "sexy";
 
 export interface Theme {
   id: ThemeId;
@@ -20,6 +20,13 @@ export const THEMES: Record<ThemeId, Theme> = {
     pro: false,
     card: { w: 720, h: 1280 },
   },
+  chibi: {
+    id: "chibi",
+    name: "Chibi",
+    blurb: "Nhân vật đầu to mắt tròn, dễ thương mà vẫn rùng rợn. Hợp mọi lứa tuổi.",
+    pro: false,
+    card: { w: 720, h: 1280 },
+  },
   sexy: {
     id: "sexy",
     name: "Gợi cảm",
@@ -29,7 +36,7 @@ export const THEMES: Record<ThemeId, Theme> = {
   },
 };
 
-export const THEME_ORDER: ThemeId[] = ["classic", "sexy"];
+export const THEME_ORDER: ThemeId[] = ["classic", "chibi", "sexy"];
 
 /** Chưa có cổng thanh toán: bộ hình Pro vẫn khóa. */
 export const PRO_THEMES_UNLOCKED = false;
