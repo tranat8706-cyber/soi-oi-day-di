@@ -44,8 +44,26 @@ const VERB: Record<NightActionKey, string> = {
 const VILLAGE_POWERS: NightRoleId[] = ["GUARD", "WITCH", "SEER", "FOX", "KAMIKAZE", "HARLOT"];
 
 /** Bước này đã có lựa chọn nào chưa. */
-const stepDone = (rid: NightRoleId, a: NightActions) =>
+const stepChosen = (rid: NightRoleId, a: NightActions) =>
   rid === "WITCH" ? !!(a.WITCH_SAVE || a.WITCH_KILL) : rid === "CUPID" ? (a.CUPID ?? "").split("|").length === 2 : !!a[rid];
+
+/** Luật "Bắt buộc dùng": các vai này phải chọn mỗi đêm. Phù thủy, Kẻ cảm tử, Sói trắng luôn được bỏ qua. */
+const REQUIRED: NightRoleId[] = ["CUPID", "WILD_CHILD", "HARLOT", "GUARD", "WOLF", "WOLF_SEER", "SEER", "FOX"];
+
+/** Chữ trên nút bỏ qua theo từng vai. */
+const SKIP_LABEL: Partial<Record<NightRoleId, string>> = {
+  WOLF: "Sói không cắn ai đêm nay",
+  WITCH: "Không dùng bình nào đêm nay",
+  GUARD: "Không che ai đêm nay",
+  SEER: "Không soi ai đêm nay",
+  WOLF_SEER: "Không soi ai đêm nay",
+  FOX: "Không đánh hơi đêm nay",
+  HARLOT: "Ở nhà đêm nay",
+  KAMIKAZE: "Chưa lao vào ai",
+  WHITE_WOLF: "Không giết Sói nào",
+  CUPID: "Không ghép đôi",
+  WILD_CHILD: "Không chọn thần tượng",
+};
 
 const Label = ({ children }: { children: ReactNode }) => (
   <p className="mt-6 font-mono text-[10px] uppercase tracking-[0.25em] text-ash">{children}</p>
@@ -65,6 +83,11 @@ export function NightScreen() {
   } = s;
   const guardSelf = s.houseRules.bodyguardSelfProtect;
   const witchSeesVictim = s.houseRules.witchSeesVictim !== false;
+  const force = s.houseRules.forceNightActions === true;
+  const skips = s.nightSkips ?? [];
+  /** Đã xong bước: có lựa chọn, hoặc Quản trò đã bấm "không dùng". */
+  const stepDone = (rid: NightRoleId, a: NightActions) => stepChosen(rid, a) || skips.includes(rid);
+  const canSkip = (rid: NightRoleId) => !force || !REQUIRED.includes(rid);
 
   // Người giữ vai của từng bước. Bước Sói gọi cả bầy (kể cả Sói đặc biệt).
   const holdersOf = (role: Role) =>
@@ -106,6 +129,7 @@ export function NightScreen() {
 
   const choose = (key: NightActionKey, target: Player | null) => {
     if ((nightActions[key] ?? null) === (target?.id ?? null)) return;
+    if (target) s.setNightSkip(stepOf(key), false); // chọn người thì hết "không dùng"
     setNightAction(key, target?.id ?? null);
     setConfirmWake(false);
     notify(target ? `${VERB[key]} ${target.name}.` : `Bỏ: ${VERB[key].toLowerCase()}.`);
@@ -118,6 +142,7 @@ export function NightScreen() {
   const toggleLover = (p: Player) => {
     const cur = (nightActions.CUPID ?? "").split("|").filter(Boolean);
     const next = cur.includes(p.id) ? cur.filter((id) => id !== p.id) : cur.length < 2 ? [...cur, p.id] : [cur[0], p.id];
+    s.setNightSkip("CUPID", false);
     setNightAction("CUPID", next.length ? next.join("|") : null);
     if (next.length === 2) {
       notify(`${VERB.CUPID} ${next.map((id) => nameOf(id)).join(" ♥ ")}.`);
@@ -132,8 +157,13 @@ export function NightScreen() {
   };
 
   const wolvesAlive = players.some((p) => p.isAlive && isWolfRole(p.roleId));
-  const missingBite = wolvesAlive && !nightActions.WOLF;
+  const missingBite = wolvesAlive && !nightActions.WOLF && !skips.includes("WOLF");
   const onWake = () => {
+    // Bắt buộc dùng: chưa chọn đủ thì mở bước còn thiếu thay vì qua đêm.
+    if (force && requiredPending.length > 0) {
+      setOpenId(requiredPending[0].id);
+      return;
+    }
     if ((missingBite || pendingSteps.length > 0) && !confirmWake) {
       setConfirmWake(true);
       setTimeout(() => setConfirmWake(false), 3000);
@@ -167,9 +197,19 @@ export function NightScreen() {
     const rid = r.id as NightRoleId;
     return !OPTIONAL.includes(rid) && !blockedReason(rid, holdersOf(r)) && !stepDone(rid, nightActions);
   });
+  const requiredPending = force ? pendingSteps.filter((r) => REQUIRED.includes(r.id as NightRoleId)) : [];
+
+  /** Bấm "Đêm nay không dùng": đánh dấu bước, xóa lựa chọn của bước đó, mở bước kế. */
+  const skipStep = (rid: NightRoleId, nextId: string | null) => {
+    s.setNightSkip(rid, true);
+    setConfirmWake(false);
+    notify(`${SKIP_LABEL[rid] ?? "Không dùng phép"}.`);
+    setOpenId(nextId);
+  };
 
   const summaryOf = (rid: NightRoleId) => {
     const a = nightActions;
+    if (skips.includes(rid)) return SKIP_LABEL[rid] ?? "Không dùng đêm nay";
     switch (rid) {
       case "WITCH":
         return [a.WITCH_SAVE && `Cứu ${nameOf(a.WITCH_SAVE)}`, a.WITCH_KILL && `Độc ${nameOf(a.WITCH_KILL)}`].filter(Boolean).join(" · ") || "Chưa dùng bình";
@@ -588,6 +628,23 @@ export function NightScreen() {
                           stepBody(role)
                         )}
 
+                        {!blocked && canSkip(rid) && (
+                          <button
+                            type="button"
+                            onClick={() => (skips.includes(rid) ? s.setNightSkip(rid, false) : skipStep(rid, next?.id ?? null))}
+                            aria-pressed={skips.includes(rid)}
+                            className={`mt-5 flex min-h-14 w-full items-center justify-center rounded-xl border border-dashed font-mono text-[11px] uppercase tracking-[0.18em] transition-colors ${
+                              skips.includes(rid) ? "border-bone/60 bg-ink text-bone" : "border-line text-ash active:text-bone"
+                            }`}
+                          >
+                            {skips.includes(rid) ? `Đã chọn: ${SKIP_LABEL[rid] ?? "không dùng"} · chạm để bỏ` : (SKIP_LABEL[rid] ?? "Đêm nay không dùng")}
+                          </button>
+                        )}
+                        {!blocked && !canSkip(rid) && (
+                          <p className="mt-5 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-ash">
+                            Luật nhà: bắt buộc dùng mỗi đêm
+                          </p>
+                        )}
                         <motion.button
                           type="button"
                           data-step-done
@@ -618,18 +675,26 @@ export function NightScreen() {
             onClick={onWake}
             whileTap={{ scale: 0.97 }}
             className={`flex h-20 w-full items-center justify-between rounded-2xl px-6 transition-colors ${
-              confirmWake ? "bg-blood text-bone" : pendingSteps.length || missingBite ? "border border-line text-bone" : "bg-bone text-ink"
+              requiredPending.length
+                ? "border border-dashed border-line text-ash"
+                : confirmWake
+                  ? "bg-blood text-bone"
+                  : pendingSteps.length || missingBite
+                    ? "border border-line text-bone"
+                    : "bg-bone text-ink"
             }`}
           >
-            <span className="text-left">
+            <span className="min-w-0 text-left">
               <span className="block font-display text-3xl uppercase leading-none">Gọi làng dậy</span>
-              {(confirmWake || pendingSteps.length > 0 || missingBite) && (
-                <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.18em] opacity-80">
-                  {confirmWake
-                    ? "Chạm lần nữa để gọi làng dậy"
-                    : missingBite
-                      ? "Sói chưa cắn ai"
-                      : `Còn ${pendingSteps.length} bước chưa chọn`}
+              {(requiredPending.length > 0 || confirmWake || pendingSteps.length > 0 || missingBite) && (
+                <span className="mt-1 block truncate font-mono text-[10px] uppercase tracking-[0.18em] opacity-80">
+                  {requiredPending.length
+                    ? `Bắt buộc · còn thiếu: ${requiredPending.map((r) => (r.id === "WOLF" ? "Bầy Sói" : r.name)).join(", ")}`
+                    : confirmWake
+                      ? "Chạm lần nữa để gọi làng dậy"
+                      : missingBite
+                        ? "Sói chưa cắn ai"
+                        : `Còn ${pendingSteps.length} bước chưa chọn`}
                 </span>
               )}
             </span>

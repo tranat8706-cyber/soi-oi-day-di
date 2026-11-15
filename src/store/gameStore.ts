@@ -39,6 +39,8 @@ export interface HouseRules {
   revealDeadRoles?: boolean;
   /** Hòa phiếu thì: quay ngẫu nhiên, bầu lại giữa những người bằng phiếu, hoặc không treo ai. */
   tieRule?: TieRule;
+  /** Bắt buộc các vai chính (Sói, Bảo vệ, Tiên tri…) dùng phép mỗi đêm. Mặc định: được bỏ qua. */
+  forceNightActions?: boolean;
 }
 
 export type TieRule = "ROULETTE" | "REVOTE" | "NONE";
@@ -195,6 +197,9 @@ interface GameStore {
 
   /** targetId = null để bỏ chọn. */
   setNightAction: (key: NightActionKey, targetId: string | null) => void;
+  /** Các bước Quản trò đã bấm "Đêm nay không dùng". */
+  nightSkips: NightRoleId[];
+  setNightSkip: (step: NightRoleId, skipped: boolean) => void;
   /** Trả về thao tác vừa bị hoàn tác (hoặc null). */
   undoLastNightAction: () => NightHistoryEntry | null;
   /** Chốt kết quả đêm, sinh kịch bản sáng, chuyển sang DAY. */
@@ -236,6 +241,7 @@ const freshRound = {
   nightNumber: 1,
   nightActions: {} as NightActions,
   nightHistory: [] as NightHistoryEntry[],
+  nightSkips: [] as NightRoleId[],
   lastGuardTargetId: null as string | null,
   lastVictimIds: [] as string[],
   morningScript: "",
@@ -486,6 +492,17 @@ export const useGameStore = create<GameStore>()(
           return { nightActions, nightHistory: [...s.nightHistory, { roleId, targetId, prevTargetId }] };
         }),
 
+      setNightSkip: (step, skipped) =>
+        set((s) => {
+          const has = s.nightSkips.includes(step);
+          if (has === skipped) return s;
+          if (!skipped) return { nightSkips: s.nightSkips.filter((x) => x !== step) };
+          // Bỏ qua bước thì xóa luôn các lựa chọn đã chọn ở bước đó.
+          const nightActions = { ...s.nightActions };
+          for (const k of Object.keys(nightActions) as NightActionKey[]) if (stepOf(k) === step) delete nightActions[k];
+          return { nightSkips: [...s.nightSkips, step], nightActions };
+        }),
+
       undoLastNightAction: () => {
         const { nightHistory, nightActions } = get();
         const last = nightHistory.at(-1);
@@ -589,6 +606,7 @@ export const useGameStore = create<GameStore>()(
             accusedVia: null,
             sparedTodayIds: [],
             nightActions: {},
+            nightSkips: [],
             nightHistory: [],
             // checkWinCondition sau mỗi đêm (đợi Thợ săn bắn xong nếu có).
             ...(hunterId ? null : endPatch(res.players, loverIds, morningScript)),
@@ -601,6 +619,7 @@ export const useGameStore = create<GameStore>()(
           gameState: "NIGHT",
           nightNumber: s.nightNumber + 1,
           nightActions: {},
+          nightSkips: [],
           nightHistory: [],
           lynchedTodayId: null,
           accusedId: null,

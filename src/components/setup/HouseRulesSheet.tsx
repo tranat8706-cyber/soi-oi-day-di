@@ -34,6 +34,19 @@ const RULES: { key: BoolRule; title: string; hint: string; def: boolean }[] = [
   },
 ];
 
+const NIGHT_OPTIONS: { value: "OPTIONAL" | "FORCE"; label: string; hint: string }[] = [
+  {
+    value: "OPTIONAL",
+    label: "Được bỏ qua",
+    hint: "Vai nào cũng có nút “Đêm nay không dùng”: Sói có thể không cắn, Bảo vệ có thể không che, Tiên tri có thể không soi…",
+  },
+  {
+    value: "FORCE",
+    label: "Bắt buộc dùng",
+    hint: "Sói phải cắn, Bảo vệ phải che, Tiên tri / Sói tiên tri / Cáo phải soi, Con điếm phải đi, đêm đầu phải ghép đôi và chọn thần tượng. Chưa chọn đủ thì không gọi làng dậy được. Phù thủy, Kẻ cảm tử, Sói trắng vẫn được bỏ qua.",
+  },
+];
+
 const ELDER_OPTIONS: { value: ElderPunish; label: string; hint: string }[] = [
   { value: "NONE", label: "Không phạt", hint: "Già làng chết thế nào cũng vậy, các vai phe Làng vẫn giữ phép." },
   {
@@ -81,7 +94,12 @@ function Segmented<T extends string>({
   return (
     <div className="border-b border-line py-4">
       <span className="block text-lg font-medium text-bone">{title}</span>
-      <div role="radiogroup" aria-label={title} className="mt-3 grid grid-cols-3 gap-1 rounded-2xl border border-line p-1">
+      <div
+        role="radiogroup"
+        aria-label={title}
+        className="mt-3 grid gap-1 rounded-2xl border border-line p-1"
+        style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
+      >
         {options.map((o) => (
           <button
             key={o.value}
@@ -192,6 +210,12 @@ export function HouseRulesList() {
                 const on = houseRules[r.key] ?? r.def;
                 return <Row key={r.key} title={r.title} hint={r.hint} on={on} onToggle={() => setHouseRule(r.key, !on)} />;
               })}
+              <Segmented
+                title="Phép ban đêm"
+                options={NIGHT_OPTIONS}
+                value={houseRules.forceNightActions ? "FORCE" : "OPTIONAL"}
+                onChange={(v) => setHouseRule("forceNightActions", v === "FORCE")}
+              />
               <Segmented
                 title="Khi hòa phiếu"
                 options={TIE_OPTIONS}
