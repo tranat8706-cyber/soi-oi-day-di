@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
-import { ChevronDown, Eye, EyeOff, Sun } from "lucide-react";
+import { ChevronDown, Eye, EyeOff, HeartPulse, Skull, Sun, TriangleAlert } from "lucide-react";
 import { getRole, isWolfRole, ROLES, looksLikeWolf, NIGHT_SEQUENCE, wakesOnNight, type Role } from "@/constants/roles";
 import {
   stepOf,
@@ -29,7 +29,7 @@ const VERB: Record<NightActionKey, string> = {
   WILD_CHILD: "Đứa trẻ hoang chọn thần tượng",
   GUARD: "Bảo vệ che",
   WOLF: "Sói cắn",
-  WOLF_2: "Sói cắn thêm",
+  WOLF_2: "Sói cắn lần 2",
   WOLF_CURSE: "Sói nguyền",
   WOLF_SEER: "Sói tiên tri soi",
   WHITE_WOLF: "Sói trắng giết",
@@ -164,6 +164,11 @@ export function NightScreen() {
   const [toast, setToast] = useState<ToastData | null>(null);
   const [confirmWake, setConfirmWake] = useState(false);
   const [confirmAbort, setConfirmAbort] = useState(false);
+  /** Kết quả soi phóng to toàn màn hình. */
+  const [flash, setFlash] = useState<Flash | null>(null);
+  /** Đã đi hết vòng mà còn bước chưa chọn: tô đỏ các bước đó. */
+  const [nudge, setNudge] = useState(false);
+  const [deckOpen, setDeckOpen] = useState(false);
   const stepRefs = useRef<Record<string, HTMLLIElement | null>>({});
   const toastSeq = useRef(0);
 
@@ -190,12 +195,36 @@ export function NightScreen() {
     }, 120);
   };
 
+  /** Kết quả soi của Tiên tri / Sói tiên tri / Cáo khi chọn một người. */
+  const resultFor = (key: NightActionKey, id: string | undefined): Flash | null => {
+    const t = players.find((p) => p.id === id);
+    if (!t) return null;
+    if (key === "SEER") {
+      const wolf = looksLikeWolf(t.roleId);
+      return { who: t.name, big: wolf ? "Là Sói" : "Không phải Sói", danger: wolf, showTo: "Tiên tri" };
+    }
+    if (key === "WOLF_SEER")
+      return { who: t.name, big: getRole(t.roleId)?.name ?? "?", danger: t.roleId === "SEER", image: card(t.roleId), showTo: "Sói tiên tri" };
+    if (key === "FOX") {
+      const group = foxGroup(players, t.id);
+      const wolf = group.some((p) => looksLikeWolf(p.roleId));
+      return { who: group.map((p) => p.name).join(" · "), big: wolf ? "Có Sói" : "Không có Sói", danger: wolf, showTo: "Cáo" };
+    }
+    return null;
+  };
+
+  const verbOf = (key: NightActionKey) => (key === "WOLF" && s.cubRevenge ? "Sói cắn lần 1" : VERB[key]);
+
   const choose = (key: NightActionKey, target: Player | null) => {
     if ((nightActions[key] ?? null) === (target?.id ?? null)) return;
     if (target) s.setNightSkip(stepOf(key), false); // chọn người thì hết "không dùng"
     setNightAction(key, target?.id ?? null);
     setConfirmWake(false);
-    notify(target ? `${VERB[key]} ${target.name}.` : `Bỏ: ${VERB[key].toLowerCase()}.`);
+    notify(target ? `${verbOf(key)} ${target.name}.` : `Bỏ: ${verbOf(key).toLowerCase()}.`);
+    if (target) {
+      const r = resultFor(key, target.id);
+      if (r) setFlash(r);
+    }
     // Bước còn lựa chọn phụ (Phù thủy 2 bình, Sói cắn người thứ hai) thì không cuộn đi.
     const pendingSecondBite = key === "WOLF" && s.cubRevenge && !nightActions.WOLF_2;
     if (target && !key.startsWith("WITCH") && key !== "WOLF_CURSE" && !pendingSecondBite) scrollToDone();
@@ -228,6 +257,7 @@ export function NightScreen() {
       return;
     }
     if ((missingBite || pendingSteps.length > 0) && !confirmWake) {
+      remindPending();
       setConfirmWake(true);
       setTimeout(() => setConfirmWake(false), 3000);
       return;
@@ -262,6 +292,16 @@ export function NightScreen() {
   });
   const requiredPending = force ? pendingSteps.filter((r) => REQUIRED.includes(r.id as NightRoleId)) : [];
 
+  const stepName = (r: Role) => (r.id === "WOLF" ? "Bầy Sói" : r.name);
+  /** Còn bước chưa chọn: tô đỏ, mở bước đầu tiên bị sót và nhắc bằng toast. */
+  const remindPending = () => {
+    if (!pendingSteps.length) return false;
+    setNudge(true);
+    setOpenId(pendingSteps[0].id);
+    notify(`Còn sót: ${pendingSteps.map(stepName).join(", ")}. Chọn người hoặc bấm “không dùng”.`);
+    return true;
+  };
+
   /** Bấm "Đêm nay không dùng": đánh dấu bước, xóa lựa chọn của bước đó, mở bước kế. */
   const skipStep = (rid: NightRoleId, nextId: string | null) => {
     s.setNightSkip(rid, true);
@@ -281,7 +321,8 @@ export function NightScreen() {
         return ids.length ? ids.map((id) => nameOf(id)).join(" ♥ ") : null;
       }
       case "WOLF": {
-        const parts = [a.WOLF && `${a.WOLF_CURSE === a.WOLF ? "Nguyền" : "Cắn"} ${nameOf(a.WOLF)}`, s.cubRevenge && a.WOLF_2 && `cắn thêm ${nameOf(a.WOLF_2)}`];
+        const first = a.WOLF_CURSE === a.WOLF ? "Nguyền" : s.cubRevenge ? "Cắn lần 1" : "Cắn";
+        const parts = [a.WOLF && `${first} ${nameOf(a.WOLF)}`, s.cubRevenge && a.WOLF_2 && `Cắn lần 2 ${nameOf(a.WOLF_2)}`];
         return parts.filter(Boolean).join(" · ") || null;
       }
       default:
@@ -351,11 +392,11 @@ export function NightScreen() {
             ))}
             {s.cubRevenge && (
               <p className="mt-5 rounded-xl border border-blood/50 bg-blood/10 px-4 py-3 text-sm leading-snug text-bone">
-                <span className="font-semibold text-blood">Sói con đã chết.</span> Bầy nổi giận: đêm nay được cắn 2 người. Đọc thêm: “Sói
-                hãy chọn thêm một người nữa.”
+                <span className="font-semibold text-blood">Sói con đã chết.</span> Bầy nổi giận: đêm nay được cắn 2 lần, mỗi lần một người.
+                Chọn xong lần 1 thì đọc: “Sói hãy chọn thêm một người nữa.”
               </p>
             )}
-            <Label>{s.cubRevenge ? "Người thứ nhất" : "Chọn người bị cắn"}</Label>
+            {s.cubRevenge ? <BiteHeader n={1} name={target?.name} /> : <Label>Chọn người bị cắn</Label>}
             <div className="mt-2">
               <PlayerList {...listProps("WOLF", pack)} />
             </div>
@@ -382,7 +423,7 @@ export function NightScreen() {
             )}
             {s.cubRevenge && (
               <>
-                <Label>Người thứ hai</Label>
+                <BiteHeader n={2} name={nameOf(a.WOLF_2)} />
                 <div className="mt-2">
                   <PlayerList {...listProps("WOLF_2", (p) => pack(p) ?? (p.id === a.WOLF ? "Đã chọn" : null))} />
                 </div>
@@ -406,7 +447,7 @@ export function NightScreen() {
                 big={getRole(t.roleId)?.name ?? "?"}
                 hint="Giơ màn hình cho Sói tiên tri thấy lá bài (người khác đang nhắm mắt)."
                 showTo="Sói tiên tri"
-                image={card(t.roleId)}
+                onShow={() => setFlash(resultFor("WOLF_SEER", t.id))}
               />
             )}
           </>
@@ -459,6 +500,7 @@ export function NightScreen() {
                       : "Lắc đầu với Tiên tri."
                 }
                 showTo="Tiên tri"
+                onShow={() => setFlash(resultFor("SEER", t.id))}
               />
             )}
           </>
@@ -480,6 +522,7 @@ export function NightScreen() {
                 big={wolf ? "Có Sói" : "Không có Sói"}
                 hint={`${wolf ? "Gật đầu với Cáo." : "Lắc đầu với Cáo. Cáo mất phép từ đêm sau."} Nhóm 3 người tính theo thứ tự chỗ ngồi đã nhập ở bước 1 (vòng tròn: người cuối ngồi cạnh người đầu). Bàn ngồi khác thứ tự thì tự nhìn 3 người ngồi sát mà trả lời.`}
                 showTo="Cáo"
+                onShow={() => setFlash(resultFor("FOX", a.FOX))}
               />
             )}
           </>
@@ -594,9 +637,16 @@ export function NightScreen() {
           </p>
         )}
 
-        <div className="mt-6">
-          <DeckSummary counts={countRoles(players)} label="Bộ bài ván này" size="sm" />
-        </div>
+        <button
+          type="button"
+          onClick={() => setDeckOpen((v) => !v)}
+          aria-expanded={deckOpen}
+          className="mt-6 flex min-h-12 w-full items-center justify-between font-mono text-[10px] uppercase tracking-[0.2em] text-ash active:text-bone"
+        >
+          Bộ bài ván này · {players.length} lá
+          <ChevronDown className={`size-5 transition-transform ${deckOpen ? "rotate-180" : ""}`} strokeWidth={1.5} />
+        </button>
+        {deckOpen && <DeckSummary counts={countRoles(players)} label="" size="sm" />}
 
         <ol className="mt-8 flex flex-col gap-3">
           {steps.map((role, idx) => {
@@ -607,6 +657,7 @@ export function NightScreen() {
             const done = stepDone(rid, nightActions);
             const next = steps[idx + 1];
             const summary = summaryOf(rid);
+            const missed = nudge && pendingSteps.includes(role);
 
             return (
               <li
@@ -615,7 +666,7 @@ export function NightScreen() {
                   stepRefs.current[role.id] = el;
                 }}
                 className={`scroll-mt-4 overflow-hidden rounded-2xl border transition-colors ${
-                  open ? "border-bone/30 bg-ink-2" : "border-line"
+                  missed ? "border-2 border-blood bg-blood/10" : open ? "border-bone/30 bg-ink-2" : "border-line"
                 }`}
               >
                 <button
@@ -642,8 +693,12 @@ export function NightScreen() {
                     >
                       {role.id === "WOLF" ? "Bầy Sói" : role.name}
                     </span>
-                    <span className="mt-1.5 block truncate font-mono text-[10px] uppercase tracking-[0.18em] text-ash">
-                      {blocked === "dead"
+                    <span
+                      className={`mt-1.5 block truncate font-mono text-[10px] uppercase tracking-[0.18em] ${missed ? "text-blood" : "text-ash"}`}
+                    >
+                      {missed
+                        ? "Chưa chọn · chạm để chọn hoặc bấm không dùng"
+                        : blocked === "dead"
                         ? "Đã chết · vẫn gọi để giữ bí mật"
                         : blocked
                           ? "Mất phép · vẫn gọi để giữ bí mật"
@@ -728,7 +783,10 @@ export function NightScreen() {
                         <motion.button
                           type="button"
                           data-step-done
-                          onClick={() => setOpenId(next?.id ?? null)}
+                          onClick={() => {
+                            if (next) setOpenId(next.id);
+                            else if (!remindPending()) setOpenId(null);
+                          }}
                           whileTap={{ scale: 0.97 }}
                           className={`mt-5 flex h-16 w-full items-center justify-between rounded-xl px-5 transition-colors ${
                             done || blocked ? "bg-bone text-ink" : "border border-bone/40 text-bone active:bg-ink"
@@ -750,6 +808,27 @@ export function NightScreen() {
 
         {/* Gọi làng dậy nằm cuối danh sách (không ghim đáy) để khỏi bấm nhầm khi đang chọn. */}
         <div className="mt-10">
+          {nudge && pendingSteps.length > 0 && (
+            <div className="mb-3 rounded-2xl border-2 border-blood bg-blood/10 px-4 py-4">
+              <p className="flex items-center gap-2 font-display text-2xl uppercase leading-[1.1] text-bone">
+                <TriangleAlert className="size-6 shrink-0 text-blood" strokeWidth={2} />
+                Còn sót {pendingSteps.length} bước
+              </p>
+              <p className="mt-1 text-sm leading-snug text-ash">Chạm để quay lại chọn. Vai không dùng phép thì bấm nút “không dùng” trong bước đó.</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {pendingSteps.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => setOpenId(r.id)}
+                    className="min-h-12 rounded-xl bg-blood px-4 font-display text-xl uppercase leading-[1.1] text-bone"
+                  >
+                    {stepName(r)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <motion.button
             type="button"
             onClick={onWake}
@@ -784,84 +863,122 @@ export function NightScreen() {
       </main>
 
       <UndoToast toast={toast} onUndo={undo} onExpire={hideToast} />
+      <ResultFlash flash={flash} onClose={() => setFlash(null)} />
     </motion.div>
   );
 }
 
-/**
- * Thẻ kết quả soi (Tiên tri, Sói tiên tri, Cáo). `showTo` có thì thêm nút giơ màn hình
- * cho người soi xem trực tiếp (toàn màn hình, không lộ phần còn lại của app).
- */
+interface Flash {
+  who: string;
+  big: string;
+  danger: boolean;
+  image?: string | null;
+  showTo?: string;
+}
+
+/** Tiêu đề lượt cắn khi Sói con báo thù: tách rõ lần 1 và lần 2. */
+function BiteHeader({ n, name }: { n: 1 | 2; name?: string }) {
+  return (
+    <div className="mt-6 flex items-center gap-3">
+      <span className="rounded-lg bg-blood px-3 pb-1.5 pt-2 font-display text-2xl uppercase leading-[1.1] text-bone">Cắn lần {n}</span>
+      <span className="truncate font-mono text-[10px] uppercase tracking-[0.18em] text-ash">{name ? `Đã chọn ${name}` : "Chưa chọn"}</span>
+    </div>
+  );
+}
+
+/** Thẻ kết quả soi (Tiên tri, Sói tiên tri, Cáo) ngay dưới danh sách. */
 function ResultCard({
   danger,
   who,
   big,
   hint,
   showTo,
-  image,
+  onShow,
 }: {
   danger: boolean;
   who: string;
   big: string;
   hint: string;
   showTo?: string;
-  image?: string | null;
+  onShow?: () => void;
 }) {
-  const { theme } = useArt();
-  const [showing, setShowing] = useState(false);
   return (
-    <>
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={who + big}
-          initial={{ opacity: 0, scale: 0.94 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.25, ease }}
-          className={`mt-5 rounded-2xl px-5 py-6 text-center ${danger ? "bg-blood text-bone" : "border border-bone/40 text-bone"}`}
-          aria-live="assertive"
-        >
-          <p className="font-mono text-[10px] uppercase tracking-[0.25em] opacity-80">{who}</p>
-          <p className="mt-2 pt-[0.15em] font-display text-5xl uppercase leading-[1.2]">{big}</p>
-          <p className="mt-3 text-sm opacity-80">{hint}</p>
-          {showTo && (
-            <button
-              type="button"
-              onClick={() => setShowing(true)}
-              className={`mt-4 flex min-h-14 w-full items-center justify-center gap-2 rounded-xl font-mono text-[11px] uppercase tracking-[0.18em] ${
-                danger ? "bg-ink/30 text-bone" : "bg-bone text-ink"
-              }`}
-            >
-              <Eye className="size-4" strokeWidth={2} />
-              Giơ màn hình cho {showTo} xem
-            </button>
-          )}
-        </motion.div>
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showing && (
-          <motion.button
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={who + big}
+        initial={{ opacity: 0, scale: 0.94 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.25, ease }}
+        className={`mt-5 rounded-2xl px-5 py-6 text-center ${danger ? "bg-blood text-bone" : "border border-bone/40 text-bone"}`}
+        aria-live="assertive"
+      >
+        <p className="font-mono text-[10px] uppercase tracking-[0.25em] opacity-80">{who}</p>
+        <p className="mt-2 pt-[0.15em] font-display text-5xl uppercase leading-[1.2]">{big}</p>
+        <p className="mt-3 text-sm opacity-80">{hint}</p>
+        {showTo && onShow && (
+          <button
             type="button"
-            onClick={() => setShowing(false)}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-ink px-6 text-center"
-            aria-label="Đóng"
+            onClick={onShow}
+            className={`mt-4 flex min-h-14 w-full items-center justify-center gap-2 rounded-xl font-mono text-[11px] uppercase tracking-[0.18em] ${
+              danger ? "bg-ink/30 text-bone" : "bg-bone text-ink"
+            }`}
           >
-            <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">{who}</span>
-            {image ? (
-              <Image src={image} alt={big} width={theme.card.w} height={theme.card.h} className="h-auto max-h-[62dvh] w-auto rounded-2xl" />
-            ) : null}
-            <span className={`pt-[0.15em] font-display text-[clamp(3rem,16vw,6rem)] uppercase leading-[1.15] ${danger ? "text-blood" : "text-bone"}`}>
-              {big}
-            </span>
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ash">Chạm để đóng</span>
-          </motion.button>
+            <Eye className="size-4" strokeWidth={2} />
+            Phóng to cho {showTo} xem
+          </button>
         )}
-      </AnimatePresence>
-    </>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+/** Kết quả soi phủ kín màn hình, chữ thật to để người ngồi xa vẫn đọc được. */
+function ResultFlash({ flash, onClose }: { flash: Flash | null; onClose: () => void }) {
+  const { theme } = useArt();
+  return (
+    <AnimatePresence>
+      {flash && (
+        <motion.button
+          key={flash.who + flash.big}
+          type="button"
+          onClick={onClose}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className={`fixed inset-0 z-50 flex flex-col items-center justify-center gap-[3dvh] px-5 text-center ${
+            flash.danger ? "bg-blood text-bone" : "bg-bone text-ink"
+          }`}
+          aria-label={`${flash.who}: ${flash.big}. Chạm để đóng`}
+        >
+          {flash.showTo && <span className="font-mono text-xs uppercase tracking-[0.3em] opacity-70">Kết quả cho {flash.showTo}</span>}
+          <span className="max-w-full break-words pt-[0.1em] font-display text-[clamp(2.2rem,11vw,4.5rem)] uppercase leading-[1.12]">
+            {flash.who}
+          </span>
+          {flash.image && (
+            <motion.span initial={{ rotateY: 90 }} animate={{ rotateY: 0 }} transition={{ duration: 0.45, ease }} className="block">
+              <Image
+                src={flash.image}
+                alt={flash.big}
+                width={theme.card.w}
+                height={theme.card.h}
+                className="h-auto max-h-[40dvh] w-auto rounded-2xl shadow-2xl"
+              />
+            </motion.span>
+          )}
+          <motion.span
+            initial={{ scale: 1.6, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.35, ease: "backOut" }}
+            className="pt-[0.12em] font-display text-[clamp(3.6rem,21vw,10rem)] uppercase leading-[1.08]"
+          >
+            {flash.big}
+          </motion.span>
+          <span className="font-mono text-[11px] uppercase tracking-[0.25em] opacity-60">Chạm bất kỳ đâu để đóng</span>
+        </motion.button>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -890,8 +1007,13 @@ function WitchStep({
   const names = bitten.map((p) => p.name).join(" và ");
   const guarded = bitten.filter((p) => actions.GUARD === p.id);
 
+  const [poisonOpen, setPoisonOpen] = useState(false);
+  const saved = players.find((p) => p.id === actions.WITCH_SAVE);
+  const killed = players.find((p) => p.id === actions.WITCH_KILL);
+  const showPoisonList = poisonOpen || !!killed;
+
   return (
-    <div className="mt-6 space-y-6">
+    <div className="mt-6 space-y-4">
       <div className="rounded-2xl border border-line px-4 py-4">
         <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-ash">Đêm nay Sói cắn</p>
         <p className={`mt-1 pt-[0.1em] font-display text-4xl uppercase leading-[1.1] ${bitten.length ? "text-blood" : "text-ash"}`}>
@@ -907,14 +1029,23 @@ function WitchStep({
         </p>
       </div>
 
-      <div>
-        <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-ash">Bình cứu · {healUsed ? "đã dùng" : "còn 1"}</p>
+      {/* Bình CỨU: xanh */}
+      <section className="rounded-2xl border-2 border-moss/70 bg-moss/10 px-4 py-4">
+        <div className="flex items-center gap-3">
+          <span className="grid size-12 shrink-0 place-items-center rounded-full bg-moss text-ink">
+            <HeartPulse className="size-6" strokeWidth={2.25} />
+          </span>
+          <span className="min-w-0">
+            <span className="block pt-[0.1em] font-display text-4xl uppercase leading-[1.08] text-[#7fdcaa]">Cứu</span>
+            <span className="block font-mono text-[10px] uppercase tracking-[0.18em] text-ash">
+              Bình cứu · {healUsed ? "đã dùng" : "còn 1 · chỉ cứu người bị Sói cắn"}
+            </span>
+          </span>
+        </div>
         {healUsed || !bitten.length ? (
-          <p className="mt-2 flex min-h-16 items-center rounded-xl border border-line px-4 text-lg font-medium text-bone opacity-30">
-            {healUsed ? "Đã dùng ở đêm trước" : "Không có ai để cứu"}
-          </p>
+          <p className="mt-3 text-base text-ash">{healUsed ? "Đã dùng ở đêm trước." : "Không có ai để cứu."}</p>
         ) : (
-          bitten.map((p) => {
+          bitten.map((p, i) => {
             const saving = actions.WITCH_SAVE === p.id;
             return (
               <button
@@ -922,24 +1053,38 @@ function WitchStep({
                 type="button"
                 onClick={() => onChoose("WITCH_SAVE", saving ? null : p)}
                 aria-pressed={saving}
-                className={`mt-2 flex min-h-16 w-full items-center justify-between rounded-xl px-4 text-left transition-colors ${
-                  saving ? "bg-moss/25 text-bone ring-1 ring-moss" : "border border-line text-bone active:bg-ink"
+                className={`mt-3 flex min-h-16 w-full items-center justify-between rounded-xl px-4 text-left transition-colors ${
+                  saving ? "bg-moss text-ink" : "border border-moss/50 text-bone active:bg-moss/20"
                 }`}
               >
-                <span className="text-lg font-medium">{saving ? `Đã cứu ${p.name}` : `Cứu ${p.name}`}</span>
-                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ash">{saving ? "Chạm để bỏ" : ""}</span>
+                <span className="text-xl font-semibold">
+                  {saving ? `✓ Đã cứu ${p.name}` : `Cứu ${p.name}`}
+                  {bitten.length > 1 && <span className="ml-2 text-xs font-normal opacity-70">bị cắn lần {i + 1}</span>}
+                </span>
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] opacity-70">{saving ? "Chạm để bỏ" : ""}</span>
               </button>
             );
           })
         )}
-      </div>
+      </section>
 
-      <div>
-        <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-ash">
-          Bình độc · {poisonUsed ? "đã dùng" : "còn 1 · chạm người muốn đầu độc"}
-        </p>
-        {!poisonUsed && (
-          <div className="mt-2">
+      {/* Bình ĐỘC: đỏ */}
+      <section className="rounded-2xl border-2 border-blood/70 bg-blood/10 px-4 py-4">
+        <div className="flex items-center gap-3">
+          <span className="grid size-12 shrink-0 place-items-center rounded-full bg-blood text-bone">
+            <Skull className="size-6" strokeWidth={2.25} />
+          </span>
+          <span className="min-w-0">
+            <span className="block pt-[0.1em] font-display text-4xl uppercase leading-[1.08] text-[#ff5a5f]">Giết</span>
+            <span className="block font-mono text-[10px] uppercase tracking-[0.18em] text-ash">
+              Bình độc · {poisonUsed ? "đã dùng" : "còn 1 · giết bất kỳ ai"}
+            </span>
+          </span>
+        </div>
+        {poisonUsed ? (
+          <p className="mt-3 text-base text-ash">Đã dùng ở đêm trước.</p>
+        ) : showPoisonList ? (
+          <div className="mt-3">
             <PlayerList
               players={players}
               showRoles
@@ -948,9 +1093,38 @@ function WitchStep({
               selectFx="poison"
               disabledReason={(p) => (p.roleId === "WITCH" ? "Không tự đầu độc" : null)}
             />
+            {!killed && (
+              <button
+                type="button"
+                onClick={() => setPoisonOpen(false)}
+                className="mt-2 min-h-12 w-full font-mono text-[11px] uppercase tracking-[0.18em] text-ash active:text-bone"
+              >
+                Đóng · không giết ai
+              </button>
+            )}
           </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setPoisonOpen(true)}
+            className="mt-3 flex min-h-16 w-full items-center justify-center rounded-xl border border-dashed border-blood/70 text-lg font-medium text-bone active:bg-blood/20"
+          >
+            Phù thủy muốn giết ai? Mở danh sách
+          </button>
         )}
-      </div>
+      </section>
+
+      <p className="rounded-xl bg-ink px-4 py-3 text-center text-base leading-snug text-bone">
+        {saved || killed ? (
+          <>
+            {saved && <span className="font-semibold text-[#7fdcaa]">Cứu {saved.name}</span>}
+            {saved && killed && <span className="text-ash"> · </span>}
+            {killed && <span className="font-semibold text-[#ff5a5f]">Giết {killed.name}</span>}
+          </>
+        ) : (
+          <span className="text-ash">Phù thủy chưa dùng bình nào</span>
+        )}
+      </p>
     </div>
   );
 }

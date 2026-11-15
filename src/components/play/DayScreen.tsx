@@ -24,6 +24,17 @@ const DEFENSE_SECONDS = 60;
  *  2. Lên giàn: người bị tố bào chữa, rồi cả làng biểu quyết TREO hay THA.
  *  3. Phán quyết: treo thì nói lời cuối; tha thì có thể tố người khác.
  */
+/** Mẹo ngắn mỗi ngày cho nhóm có người mới: các chiêu Sói hay dùng khi bị nghi. */
+const DAY_TIPS = [
+  "Ai tự nhận là Tiên tri cũng chưa chắc thật. Sói rất thích nhận vơ vai này để được tin.",
+  "Câu “treo tao là cả làng hối hận” nghe thì sợ, nhưng Sói bị dồn cũng hay nói y vậy.",
+  "Người cứ lái nghi ngờ sang kẻ khác thật nhiệt tình cũng đáng để ý.",
+  "Đừng vội mủi lòng khi ai đó buồn bã chấp nhận số phận. Đó có thể là diễn.",
+  "Kiểu “mình nghĩ là…, mọi người thấy sao?” nghe trung lập nhưng có khi đang dắt cả làng.",
+  "Người dám thách “treo tôi đi” chưa chắc vô tội. Nhớ lại họ đã bỏ phiếu cho ai hôm trước.",
+  "Ai nhận có “chức năng đặc biệt” thì hỏi kỹ đêm qua họ làm gì, rồi đối chiếu chuyện sáng nay.",
+];
+
 export function DayScreen() {
   const { art } = useArt();
   const players = useGameStore((s) => s.players);
@@ -47,6 +58,7 @@ export function DayScreen() {
   const startNextNight = useGameStore((s) => s.startNextNight);
   const backToSetup = useGameStore((s) => s.backToSetup);
   const houseRules = useGameStore((s) => s.houseRules);
+  const skill = useGameStore((s) => s.skill);
   const tieRule = houseRules.tieRule ?? "ROULETTE";
   const revealRoles = houseRules.revealDeadRoles === true;
 
@@ -308,6 +320,12 @@ export function DayScreen() {
                     </span>
                   </div>
 
+                  {skill === "NEWBIE" && (
+                    <div className="mt-4 rounded-2xl border border-[#f5c15a]/50 bg-[#f5c15a]/10 px-4 py-3">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#f5c15a]">Mẹo cho người mới · đọc to cho cả bàn</p>
+                      <p className="mt-1 text-lg leading-snug text-bone">“{DAY_TIPS[(nightNumber - 1) % DAY_TIPS.length]}”</p>
+                    </div>
+                  )}
                   <ol className="mt-4 space-y-2 rounded-2xl border border-line bg-ink-2 px-4 py-4 text-[15px] leading-snug text-bone/85">
                     <li>
                       <span className="font-mono text-ash">1.</span> Cả làng bàn bạc, ai nghi ai thì nói.

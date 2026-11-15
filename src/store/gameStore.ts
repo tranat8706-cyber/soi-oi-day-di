@@ -196,9 +196,6 @@ interface GameStore {
   /** Đứa trẻ hoang vừa hóa Sói, quản trò cần báo cho họ ở đêm kế tiếp. */
   newWolfIds: string[];
   gameLog: LogEntry[];
-  logVotes: Record<number, 1 | -1>;
-  /** Bấm lại cùng nút thì bỏ chọn. */
-  voteLog: (index: number, v: 1 | -1) => void;
   /** Các bước lớn (gọi làng dậy, treo, tha, bắn, sang đêm) để quản trò lùi lại khi lỡ tay. */
   undoStack: UndoEntry[];
   /** Lùi lại bước lớn gần nhất. */
@@ -276,8 +273,6 @@ const freshRound = {
   newWolfIds: [] as string[],
   /** Nhật ký cả ván cho màn tổng kết. */
   gameLog: [] as LogEntry[],
-  /** Like (1) / unlike (-1) cho từng dòng nhật ký, theo vị trí dòng. */
-  logVotes: {} as Record<number, 1 | -1>,
   undoStack: [] as UndoEntry[],
   pendingHunterId: null as string | null,
   hunterShotId: null as string | null,
@@ -446,13 +441,6 @@ export const useGameStore = create<GameStore>()(
       customDeck: null,
 
       setOnboarded: (onboarded) => set({ onboarded }),
-      voteLog: (index, v) =>
-        set((s) => {
-          const logVotes = { ...s.logVotes };
-          if (logVotes[index] === v) delete logVotes[index];
-          else logVotes[index] = v;
-          return { logVotes };
-        }),
       skill: "MIXED",
       setSkill: (skill) => set({ skill }),
       theme: "classic",
@@ -548,7 +536,7 @@ export const useGameStore = create<GameStore>()(
       markRevealed: (id) =>
         set((s) => (s.revealedIds.includes(id) ? s : { revealedIds: [...s.revealedIds, id] })),
 
-      backToSetup: () => set((s) => ({ ...freshRound, gameState: "SETUP", setupStep: 1, players: resetPlayers(s.players) })),
+      backToSetup: () => set((s) => ({ ...freshRound, gameState: "SETUP", setupStep: 2, players: resetPlayers(s.players) })),
 
       setNightAction: (roleId, targetId) =>
         set((s) => {
@@ -867,8 +855,12 @@ export const useGameStore = create<GameStore>()(
       rematch: () =>
         set((s) => ({
           ...freshRound,
-          gameState: "PASS_AND_PLAY",
-          players: balanceRoles(resetPlayers(s.players), s.customDeck, s.autoSeed, s.skill),
+          // Ván mới: giữ nhóm người chơi, quay về chọn lại bộ bài (bộ hình và tên ván ở bước sau).
+          gameState: "SETUP",
+          setupStep: 2,
+          sessionTitle: "",
+          autoSeed: Math.floor(Math.random() * 1_000_000_000),
+          players: resetPlayers(s.players),
         })),
     }),
     {

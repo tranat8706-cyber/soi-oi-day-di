@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Check, CircleHelp, Plus, SlidersHorizontal, Smartphone } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, CircleHelp, Dices, Plus, SlidersHorizontal } from "lucide-react";
 import { MAX_PLAYERS, MIN_PLAYERS, useGameStore, type SetupStep } from "@/store/gameStore";
 import { unlockAudio } from "@/utils/audio";
 import { track } from "@/utils/analytics";
@@ -19,10 +19,8 @@ import { Lock } from "lucide-react";
 import { THEME_ORDER, THEMES, PRO_THEMES_UNLOCKED, activeTheme, cardSrc } from "@/constants/themes";
 
 const QUICK_FILL = [6, 8, 10, 12];
-const ease = [0.22, 1, 0.36, 1] as const;
 
 const STEPS: { n: SetupStep; label: string }[] = [
-  { n: 1, label: "Người chơi" },
   { n: 2, label: "Bộ bài" },
   { n: 3, label: "Luật chơi" },
 ];
@@ -34,6 +32,25 @@ const isPlaceholder = (name: string) => /^Người \d+$/.test(name);
  * Màn chuẩn bị theo 3 bước bắt buộc: nhập người chơi → chốt bộ bài → xem luật chơi.
  * Chưa xong bước trước thì không sang được bước sau.
  */
+const TITLES = [
+  "Đêm đẫm máu",
+  "Làng không ngủ",
+  "Ai cũng đáng nghi",
+  "Sói đội lốt cừu",
+  "Đêm trăng máu",
+  "Thề là tôi dân",
+  "Tin nhau đi mà",
+  "Bữa tối cuối cùng",
+  "Treo nhầm còn hơn bỏ sót",
+  "Làng hoang mang",
+  "Sói về làng",
+  "Đêm không trăng",
+];
+const randomTitle = (cur: string) => {
+  const pool = TITLES.filter((t) => t !== cur);
+  return pool[Math.floor(Math.random() * pool.length)];
+};
+
 export function SetupScreen() {
   const sessionTitle = useGameStore((s) => s.sessionTitle);
   const setSessionTitle = useGameStore((s) => s.setSessionTitle);
@@ -119,26 +136,28 @@ export function SetupScreen() {
   const cta =
     step === 1
       ? ready
-        ? { key: "s1", label: "Tiếp · chọn bộ bài", onClick: () => go(2) }
+        ? { key: "s1", label: "Xong · về bộ bài", onClick: () => go(2) }
         : null
       : step === 2
         ? { key: "s2", label: "Tiếp · luật chơi", onClick: leaveDeckStep }
-        : { key: "s3", label: "Bắt đầu chia bài", onClick: onStart };
+        : sessionTitle.trim()
+          ? { key: "s3", label: "Bắt đầu chia bài", onClick: onStart }
+          : null;
 
   return (
     <div className="mx-auto flex w-full max-w-xl flex-1 flex-col pt-safe">
       {/* Thanh trên */}
       <header className="flex items-center justify-between px-safe pt-2">
-        {step === 1 ? (
+        {step === 2 || (step === 1 && !ready) ? (
           <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">Quản trò · Offline</p>
         ) : (
           <button
             type="button"
-            onClick={() => go((step - 1) as SetupStep)}
+            onClick={() => go(step === 1 ? 2 : ((step - 1) as SetupStep))}
             className="-ml-3 flex min-h-16 items-center gap-1.5 px-3 font-mono text-[11px] uppercase tracking-[0.2em] text-bone active:text-ash"
           >
             <ArrowLeft className="size-4" strokeWidth={1.75} />
-            {STEPS[step - 2].label}
+            {step === 1 ? "Về bộ bài" : "Bộ bài"}
           </button>
         )}
         <div className="-mr-4 flex">
@@ -163,16 +182,16 @@ export function SetupScreen() {
 
       {/* Các bước */}
       <nav aria-label="Các bước chuẩn bị" className="px-safe">
-        <ol className="grid grid-cols-3 gap-2">
-          {STEPS.map((s) => {
+        <ol className="grid grid-cols-2 gap-2">
+          {STEPS.map((s, idx) => {
             const done = s.n < step;
             const active = s.n === step;
-            const reachable = s.n === 1 || ready;
+            const reachable = ready;
             return (
               <li key={s.n}>
                 <button
                   type="button"
-                  disabled={!reachable || s.n === step || (s.n === 3 && step === 1)}
+                  disabled={!reachable || s.n === step}
                   onClick={() => (s.n === 3 ? leaveDeckStep() : go(s.n))}
                   aria-current={active ? "step" : undefined}
                   className="w-full text-left disabled:cursor-default"
@@ -183,7 +202,7 @@ export function SetupScreen() {
                       active ? "text-bone" : done ? "text-ash" : "text-ash/50"
                     }`}
                   >
-                    {done ? <Check className="size-3" strokeWidth={2.5} /> : `0${s.n}`} {s.label}
+                    {done ? <Check className="size-3" strokeWidth={2.5} /> : `0${idx + 1}`} {s.label}
                   </span>
                 </button>
               </li>
@@ -196,40 +215,15 @@ export function SetupScreen() {
         <AnimatePresence mode="wait" initial={false}>
           {step === 1 && (
             <motion.div key="step1" initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.25 }}>
-              {/* Tiêu đề */}
-              <h1 className="mt-6 font-display uppercase leading-[1.18] tracking-tight text-bone text-[clamp(5rem,26vw,10.5rem)]">
-                <motion.span
-                  className="block"
-                  initial={{ opacity: 0, y: 24, filter: "blur(8px)" }}
-                  animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                  transition={{ duration: 0.9, ease }}
-                >
-                  Sói ơi
-                </motion.span>
-                <motion.span
-                  className="block"
-                  initial={{ opacity: 0, y: 24, filter: "blur(8px)" }}
-                  animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                  transition={{ duration: 0.9, delay: 0.15, ease }}
-                >
-                  Dậy đi<span className="text-blood">!</span>
-                </motion.span>
-              </h1>
-              <p className="mt-4 max-w-[28ch] text-base leading-relaxed text-ash">Một chiếc điện thoại. Một bàn người. Không ai được tin ai.</p>
-
-              {/* Ai cầm máy */}
-              <div className="mt-10 flex gap-4 rounded-2xl border border-line bg-ink-2 px-4 py-4">
-                <Smartphone className="mt-0.5 size-6 shrink-0 text-blood" strokeWidth={1.5} />
-                <p className="text-sm leading-relaxed text-bone/80">
-                  <span className="font-semibold text-bone">Bạn là Quản trò.</span> Bạn cầm máy dẫn truyện, không nhận bài nên không cần
-                  nhập tên mình. Chỉ nhập tên những người chơi.
-                </p>
-              </div>
+              <h2 className="mt-8 font-display text-[clamp(3rem,15vw,5rem)] uppercase leading-[1.18] text-bone">
+                Người chơi<span className="text-blood">.</span>
+              </h2>
+              <p className="mt-2 text-sm leading-snug text-ash">Quản trò không nhận bài nên không nhập tên mình.</p>
 
               {/* Người chơi */}
-              <section className="mt-12">
+              <section className="mt-6">
                 <div className="flex items-end justify-between">
-                  <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">01 — Người chơi</span>
+                  <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">Theo vòng ngồi</span>
                   <span className="font-display text-5xl leading-none tabular-nums text-bone">{String(players.length).padStart(2, "0")}</span>
                 </div>
                 <p className="mt-2 text-sm leading-snug text-ash">
@@ -352,6 +346,19 @@ export function SetupScreen() {
               <p className="mt-2 text-sm leading-snug text-ash">
                 {players.length} người chơi. Chọn ván này có những vai nào; Quản trò sẽ đọc to cho cả bàn biết trước khi chia.
               </p>
+              <button
+                type="button"
+                onClick={() => go(1)}
+                className="mt-4 flex min-h-16 w-full items-center justify-between gap-3 rounded-2xl border border-line px-4 text-left active:bg-ink-2"
+              >
+                <span className="min-w-0">
+                  <span className="block font-mono text-[10px] uppercase tracking-[0.2em] text-ash">Người chơi · {players.length} người</span>
+                  <span className="block truncate text-base text-bone">{players.map((p) => p.name).join(", ")}</span>
+                </span>
+                <span className="shrink-0 font-mono text-[11px] uppercase tracking-[0.18em] text-bone underline decoration-blood underline-offset-4">
+                  Sửa tên
+                </span>
+              </button>
               <DeckEditor />
             </motion.section>
           )}
@@ -364,15 +371,16 @@ export function SetupScreen() {
               <p className="mt-2 text-sm leading-snug text-ash">Thống nhất với cả bàn trước khi chơi để khỏi cãi nhau giữa ván.</p>
 
               <div className="mt-6">
-                <HouseRulesList />
+                <HouseRulesList compact />
               </div>
 
               <ThemePicker />
 
               <section className="mt-10">
                 <label htmlFor="session-title" className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">
-                  Tên ván <span className="text-ash/50">· không bắt buộc</span>
+                  Tên ván <span className="text-blood">· bắt buộc</span>
                 </label>
+                <div className="mt-2 flex items-end gap-2">
                 <input
                   id="session-title"
                   value={sessionTitle}
@@ -381,9 +389,20 @@ export function SetupScreen() {
                   autoComplete="off"
                   enterKeyHint="done"
                   onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && e.currentTarget.blur()}
-                  className="mt-2 h-16 w-full border-b border-line bg-transparent text-2xl font-medium text-bone outline-none placeholder:text-ash/40 focus:border-bone"
+                  className={`h-16 min-w-0 flex-1 border-b bg-transparent text-2xl font-medium text-bone outline-none placeholder:text-ash/40 focus:border-bone ${
+                    sessionTitle.trim() ? "border-line" : "border-blood"
+                  }`}
                 />
-                <p className="mt-2 text-sm text-ash">In lên ảnh tổng kết cuối ván để khoe lên Story.</p>
+                <button
+                  type="button"
+                  onClick={() => setSessionTitle(randomTitle(sessionTitle))}
+                  aria-label="Gợi ý tên ván ngẫu nhiên"
+                  className="grid size-16 shrink-0 place-items-center rounded-xl border border-line text-bone active:bg-ink-2"
+                >
+                  <Dices className="size-6" strokeWidth={1.75} />
+                </button>
+                </div>
+                <p className="mt-2 text-sm text-ash">In lên ảnh tổng kết và ảnh Story. Bí ý tưởng thì bấm xúc xắc.</p>
               </section>
 
               {/* Tóm tắt trước khi chia */}
@@ -432,7 +451,15 @@ export function SetupScreen() {
                   className="flex h-20 items-center justify-center rounded-2xl border border-dashed border-line"
                 >
                   <p className="font-mono text-xs uppercase tracking-[0.2em] text-ash">
-                    Cần thêm <span className="text-bone">{missing}</span> người nữa
+                    {step === 3 ? (
+                      <>
+                        Đặt <span className="text-bone">tên ván</span> để bắt đầu
+                      </>
+                    ) : (
+                      <>
+                        Cần thêm <span className="text-bone">{missing}</span> người nữa
+                      </>
+                    )}
                   </p>
                 </motion.div>
               )}

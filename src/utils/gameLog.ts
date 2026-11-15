@@ -13,7 +13,26 @@ export interface LogEntry {
   impact?: string;
   /** Người tạo ra pha này (để trao giải). */
   actorId?: string;
+  /** Loại pha, dùng để viết nhận xét tổng ván. */
+  tag?: LogTag;
 }
+
+export type LogTag =
+  | "KEY_KILL"
+  | "SAVE"
+  | "CURSE"
+  | "POISON_WOLF"
+  | "POISON_WRONG"
+  | "SEER_HIT"
+  | "WOLF_SEER_KEY"
+  | "FOX_MISS"
+  | "RAM_WOLF"
+  | "RAM_WRONG"
+  | "LYNCH_WOLF"
+  | "LYNCH_WRONG"
+  | "SPARE_WOLF"
+  | "SHOT_WOLF"
+  | "SHOT_WRONG";
 
 interface P {
   id: string;
@@ -64,8 +83,8 @@ export function logNight(f: NightFacts): LogEntry[] {
   const out: LogEntry[] = [];
   const by = (id?: string) => f.before.find((p) => p.id === id);
   const holder = (roleId: string) => f.before.find((p) => p.isAlive && p.roleId === roleId);
-  const add = (text: string, tone: LogTone, impact?: string, actorId?: string) =>
-    out.push({ round: f.round, phase: "NIGHT", text, tone, impact, actorId });
+  const add = (text: string, tone: LogTone, impact?: string, actorId?: string, tag?: LogTag) =>
+    out.push({ round: f.round, phase: "NIGHT", text, tone, impact, actorId, tag });
   const a = f.actions;
   const seed = f.round * 31 + f.before.length;
 
@@ -96,7 +115,7 @@ export function logNight(f: NightFacts): LogEntry[] {
     if (!v) continue;
     switch (f.biteOutcome[id]) {
       case "HARLOT_AWAY":
-        add(`Sói mò vào nhà ${v.name} nhưng Con điếm đi chơi đêm. Về tay trắng.`, "good", "Sói phí một đêm, làng giữ nguyên quân số.", v.id);
+        add(`Sói mò vào nhà ${v.name} nhưng Con điếm đi chơi đêm. Về tay trắng.`, "good", "Sói phí một đêm, làng giữ nguyên quân số.", v.id, "SAVE");
         break;
       case "GUARDED":
         add(
@@ -104,6 +123,7 @@ export function logNight(f: NightFacts): LogEntry[] {
           "good",
           `Cứu được ${v.name}, Sói phí một đêm. Đêm sau Bảo vệ không được che ${v.name} nữa, Sói có thể quay lại.`,
           guard?.id,
+          "SAVE",
         );
         break;
       case "HEALED":
@@ -112,6 +132,7 @@ export function logNight(f: NightFacts): LogEntry[] {
           "good",
           "Bình cứu đã dùng: từ đêm sau ai bị cắn là chết thật, trừ khi Bảo vệ che trúng.",
           witch?.id,
+          "SAVE",
         );
         break;
       case "ELDER":
@@ -123,11 +144,12 @@ export function logNight(f: NightFacts): LogEntry[] {
           "good",
           `Bầy Sói thêm một người mà làng không hay biết, và ${v.name} mất luôn phép cũ. Tiên tri soi ${v.name} sẽ ra Sói.`,
           holder("CURSED_WOLF")?.id,
+          "CURSE",
         );
         break;
       case "KILLED":
         if (KEY_ROLES.has(v.roleId ?? ""))
-          add(`Bầy Sói cắn trúng ${roleName(v)} ${v.name}. Đúng tủ, làng toang một mảng.`, "good", LOSS_IMPACT[v.roleId ?? ""]);
+          add(`Bầy Sói cắn trúng ${roleName(v)} ${v.name}. Đúng tủ, làng toang một mảng.`, "good", LOSS_IMPACT[v.roleId ?? ""], undefined, "KEY_KILL");
         else if (isWolfRole(v.roleId)) add(`Sói cắn nhầm đồng bọn ${v.name}?`, "bad", "Bầy tự mất một răng.");
         else
           add(
@@ -149,13 +171,14 @@ export function logNight(f: NightFacts): LogEntry[] {
   if (witch && a.WITCH_KILL && !f.lost) {
     const t = by(a.WITCH_KILL);
     if (t && isWolfRole(t.roleId))
-      add(`Phù thủy ${witch.name} hạ độc trúng Sói ${t.name}.`, "good", "Bầy Sói mất một răng. Bình độc đã dùng, từ giờ Phù thủy chỉ còn bình cứu (nếu chưa dùng).", witch.id);
+      add(`Phù thủy ${witch.name} hạ độc trúng Sói ${t.name}.`, "good", "Bầy Sói mất một răng. Bình độc đã dùng, từ giờ Phù thủy chỉ còn bình cứu (nếu chưa dùng).", witch.id, "POISON_WOLF");
     else if (t)
       add(
         `Phù thủy ${witch.name} đầu độc nhầm ${t.name} (${roleName(t)}).`,
         "bad",
         `Làng mất người vì chính phe mình, bình độc cũng hết. ${LOSS_IMPACT[t.roleId ?? ""] ?? ""}`.trim(),
         witch.id,
+        "POISON_WRONG",
       );
   }
 
@@ -165,7 +188,7 @@ export function logNight(f: NightFacts): LogEntry[] {
     if (t?.roleId === "LYCAN")
       add(`Tiên tri ${seer.name} soi ${t.name} ra Sói… nhưng là Bán sói.`, "info", `Nếu Tiên tri tố ${t.name}, làng sẽ treo oan một người phe mình.`, seer.id);
     else if (t && looksLikeWolf(t.roleId))
-      add(`Tiên tri ${seer.name} soi trúng Sói ${t.name}. Mắt thần!`, "good", `Ban ngày Tiên tri cần dẫn dắt khéo để làng treo ${t.name} mà không lộ mặt mình.`, seer.id);
+      add(`Tiên tri ${seer.name} soi trúng Sói ${t.name}. Mắt thần!`, "good", `Ban ngày Tiên tri cần dẫn dắt khéo để làng treo ${t.name} mà không lộ mặt mình.`, seer.id, "SEER_HIT");
     else if (t) add(`Tiên tri ${seer.name} soi ${t.name}: dân lành.`, "info", `Gạch được ${t.name} khỏi danh sách nghi ngờ.`, seer.id);
   }
 
@@ -173,7 +196,7 @@ export function logNight(f: NightFacts): LogEntry[] {
   if (wolfSeer && a.WOLF_SEER) {
     const t = by(a.WOLF_SEER);
     if (t && KEY_ROLES.has(t.roleId ?? ""))
-      add(`Sói tiên tri ${wolfSeer.name} soi ra ${t.name} là ${roleName(t)}.`, "good", `Bầy đã biết mặt ${roleName(t)}: các đêm sau ${t.name} rất dễ bị cắn.`, wolfSeer.id);
+      add(`Sói tiên tri ${wolfSeer.name} soi ra ${t.name} là ${roleName(t)}.`, "good", `Bầy đã biết mặt ${roleName(t)}: các đêm sau ${t.name} rất dễ bị cắn.`, wolfSeer.id, "WOLF_SEER_KEY");
     else if (t) add(`Sói tiên tri ${wolfSeer.name} soi ${t.name}: ${roleName(t)}.`, "info", "Bầy biết thêm một người không đáng lo.", wolfSeer.id);
   }
 
@@ -186,6 +209,7 @@ export function logNight(f: NightFacts): LogEntry[] {
         ? "Nghi ngờ thu hẹp còn 3 người. Cáo vẫn giữ phép cho đêm sau."
         : "Từ đêm sau Cáo không đánh hơi được nữa, nhưng làng biết chắc 3 người đó sạch.",
       fox.id,
+      f.foxFound ? undefined : "FOX_MISS",
     );
 
   const harlot = holder("HARLOT");
@@ -199,8 +223,8 @@ export function logNight(f: NightFacts): LogEntry[] {
   if (kamikaze && f.rammedId) {
     const t = by(f.rammedId);
     if (t && isWolfRole(t.roleId))
-      add(`Kẻ cảm tử ${kamikaze.name} ôm bom lao vào Sói ${t.name}. Hy sinh anh dũng!`, "good", "Đổi một dân lấy một Sói: phe Làng lời.", kamikaze.id);
-    else add(`Kẻ cảm tử ${kamikaze.name} lao vào ${t?.name} (${roleName(t)}). Nổ nhầm phe.`, "bad", "Làng mất hai người một lúc, Sói ngồi không cũng lời.", kamikaze.id);
+      add(`Kẻ cảm tử ${kamikaze.name} ôm bom lao vào Sói ${t.name}. Hy sinh anh dũng!`, "good", "Đổi một dân lấy một Sói: phe Làng lời.", kamikaze.id, "RAM_WOLF");
+    else add(`Kẻ cảm tử ${kamikaze.name} lao vào ${t?.name} (${roleName(t)}). Nổ nhầm phe.`, "bad", "Làng mất hai người một lúc, Sói ngồi không cũng lời.", kamikaze.id, "RAM_WRONG");
   }
 
   const white = holder("WHITE_WOLF");
@@ -231,8 +255,8 @@ export function statusEntry(round: number, phase: "NIGHT" | "DAY", players: P[])
 }
 
 /** Một dòng nhật ký ban ngày. */
-export function dayEntry(round: number, text: string, tone: LogTone, impact?: string, actorId?: string): LogEntry {
-  return { round, phase: "DAY", text, tone, impact, actorId };
+export function dayEntry(round: number, text: string, tone: LogTone, impact?: string, actorId?: string, tag?: LogTag): LogEntry {
+  return { round, phase: "DAY", text, tone, impact, actorId, tag };
 }
 
 /** Ghi pha treo cổ. */
@@ -249,9 +273,9 @@ export function logLynch(
   if (idiotSaved)
     out.push(dayEntry(round, `${lead}… là Thằng ngố. Cười trừ một cái, thoát chết.`, "info", "Thằng ngố còn sống nhưng mất quyền bỏ phiếu tới hết ván.", target.id));
   else if (isWolfRole(target.roleId))
-    out.push(dayEntry(round, `${lead}: đúng Sói!`, "good", "Bầy Sói mất một răng, đêm nay cắn ít người hơn hoặc phải liều hơn."));
+    out.push(dayEntry(round, `${lead}: đúng Sói!`, "good", "Bầy Sói mất một răng, đêm nay cắn ít người hơn hoặc phải liều hơn.", undefined, "LYNCH_WOLF"));
   else if (target.roleId === "ELDER")
-    out.push(dayEntry(round, `${lead}: là Già làng.`, "bad", "Trời phạt: các vai phép phe Làng có thể mất phép tới hết ván (theo luật nhà)."));
+    out.push(dayEntry(round, `${lead}: là Già làng.`, "bad", "Trời phạt: các vai phép phe Làng có thể mất phép tới hết ván (theo luật nhà).", undefined, "LYNCH_WRONG"));
   else
     out.push(
       dayEntry(
@@ -259,6 +283,8 @@ export function logLynch(
         `${lead}: là ${roleName(target)}. Treo nhầm người.`,
         "bad",
         `Làng tự chặt tay mình, Sói lại gần chiến thắng thêm một bước. ${LOSS_IMPACT[target.roleId ?? ""] ?? ""}`.trim(),
+        undefined,
+        "LYNCH_WRONG",
       ),
     );
   for (const d of died.filter((x) => x.cause === "HEARTBREAK"))
@@ -268,15 +294,15 @@ export function logLynch(
 
 export function logSpare(round: number, target: P): LogEntry {
   return isWolfRole(target.roleId)
-    ? dayEntry(round, `Làng mủi lòng tha cho ${target.name}… là Sói.`, "bad", "Sói thoát nạn, đêm nay tiếp tục cắn. Ai bênh nhiệt tình nhất cũng đáng nghi.")
+    ? dayEntry(round, `Làng mủi lòng tha cho ${target.name}… là Sói.`, "bad", "Sói thoát nạn, đêm nay tiếp tục cắn. Ai bênh nhiệt tình nhất cũng đáng nghi.", undefined, "SPARE_WOLF")
     : dayEntry(round, `Làng tha ${target.name}. Đúng là dân lành thật.`, "good", "Giữ được một người vô tội, nhưng mất một ngày chưa treo được Sói.");
 }
 
 export function logShot(round: number, hunter: P, target: P | undefined): LogEntry {
   if (!target) return dayEntry(round, `Thợ săn ${hunter.name} buông súng, không bắn ai.`, "info", "Phí phát súng cuối cùng.", hunter.id);
   return isWolfRole(target.roleId)
-    ? dayEntry(round, `Thợ săn ${hunter.name} bắn chết Sói ${target.name}.`, "good", "Chết vẫn kéo được một con Sói theo: phe Làng không lỗ.", hunter.id)
-    : dayEntry(round, `Thợ săn ${hunter.name} bắn nhầm ${target.name} (${roleName(target)}).`, "bad", "Làng mất thêm một người, Sói được lợi kép.", hunter.id);
+    ? dayEntry(round, `Thợ săn ${hunter.name} bắn chết Sói ${target.name}.`, "good", "Chết vẫn kéo được một con Sói theo: phe Làng không lỗ.", hunter.id, "SHOT_WOLF")
+    : dayEntry(round, `Thợ săn ${hunter.name} bắn nhầm ${target.name} (${roleName(target)}).`, "bad", "Làng mất thêm một người, Sói được lợi kép.", hunter.id, "SHOT_WRONG");
 }
 
 /** Giải hay nhất / dở nhất theo số pha good/bad của từng người. */
@@ -287,4 +313,112 @@ export function awards(log: LogEntry[]) {
     return [...m.entries()].sort((x, y) => y[1] - x[1])[0];
   };
   return { best: score("good"), worst: score("bad") };
+}
+
+/** Pha đủ nặng để gọi là bước ngoặt, xếp theo độ nặng. */
+const TURNING: LogTag[] = [
+  "KEY_KILL",
+  "LYNCH_WRONG",
+  "LYNCH_WOLF",
+  "POISON_WOLF",
+  "POISON_WRONG",
+  "SHOT_WOLF",
+  "SHOT_WRONG",
+  "RAM_WOLF",
+  "RAM_WRONG",
+  "CURSE",
+  "SPARE_WOLF",
+  "SAVE",
+  "SEER_HIT",
+  "WOLF_SEER_KEY",
+  "FOX_MISS",
+];
+
+const parseStatus = (e: LogEntry) => {
+  const m = e.text.match(/Còn (\d+) Sói · (\d+) Làng/);
+  return { w: Number(m?.[1] ?? 0), v: Number(m?.[2] ?? 0) };
+};
+const when = (e: LogEntry) => `${e.phase === "NIGHT" ? "Đêm" : "Ngày"} ${e.round}`;
+
+export interface Verdict {
+  paragraphs: string[];
+  /** Các bước ngoặt theo thứ tự thời gian, kèm hệ quả cho các đêm sau. */
+  turning: { when: string; text: string; impact?: string }[];
+}
+
+/** Nhận xét tổng ván: diễn biến cục diện, mỗi phe làm được gì, vì sao bên thắng thắng. */
+export function verdict(log: LogEntry[], winner: string | null, nights: number): Verdict {
+  const count = (...tags: LogTag[]) => log.filter((e) => e.tag && tags.includes(e.tag)).length;
+  const statuses = log.filter((e) => e.tone === "status");
+  const paragraphs: string[] = [];
+
+  const first = statuses[0] && parseStatus(statuses[0]);
+  const last = statuses.at(-1) && parseStatus(statuses.at(-1)!);
+  if (first && last) {
+    // Lúc làng nguy nhất: khoảng cách Làng - Sói nhỏ nhất khi Sói còn sống.
+    let worst: LogEntry | undefined;
+    let gap = Infinity;
+    for (const e of statuses) {
+      const { w, v } = parseStatus(e);
+      if (w > 0 && v - w < gap) {
+        gap = v - w;
+        worst = e;
+      }
+    }
+    let p = `Ván kéo dài ${nights} đêm, mở đầu sau đêm 1 ở thế ${first.w} Sói : ${first.v} Làng và khép lại ở ${last.w} : ${last.v}.`;
+    if (worst && gap <= 2 && winner !== "WOLF") p += ` Thời điểm làng nguy nhất là sau ${when(worst).toLowerCase()}, chỉ hơn bầy Sói ${gap} người.`;
+    paragraphs.push(p);
+  }
+
+  const lynchWolf = count("LYNCH_WOLF");
+  const lynchWrong = count("LYNCH_WRONG");
+  const saves = count("SAVE");
+  const seerHits = count("SEER_HIT");
+  const villageKills = count("POISON_WOLF", "SHOT_WOLF", "RAM_WOLF");
+  const friendlyFire = count("POISON_WRONG", "SHOT_WRONG", "RAM_WRONG");
+  const village: string[] = [];
+  if (lynchWolf + lynchWrong) village.push(`treo đúng ${lynchWolf} Sói, treo nhầm ${lynchWrong} người phe mình`);
+  if (seerHits) village.push(`Tiên tri soi trúng Sói ${seerHits} lần`);
+  if (saves) village.push(`cứu thoát ${saves} cú cắn`);
+  if (villageKills) village.push(`hạ thêm ${villageKills} Sói bằng phép ban đêm hoặc súng`);
+  if (friendlyFire) village.push(`tự bắn nhầm phe ${friendlyFire} lần`);
+  if (village.length) paragraphs.push(`Phe Làng: ${village.join(", ")}.`);
+
+  const keyKills = log.filter((e) => e.tag === "KEY_KILL");
+  const wolves: string[] = [];
+  if (keyKills.length) wolves.push(`cắn trúng ${keyKills.length} vai chủ chốt (${keyKills.map(when).join(", ").toLowerCase()})`);
+  if (count("CURSE")) wolves.push("nguyền thêm được đồng bọn");
+  if (count("WOLF_SEER_KEY")) wolves.push(`Sói tiên tri lộ mặt ${count("WOLF_SEER_KEY")} vai phép`);
+  if (count("SPARE_WOLF")) wolves.push(`được làng tha ${count("SPARE_WOLF")} lần`);
+  if (wolves.length) paragraphs.push(`Phe Sói: ${wolves.join(", ")}.`);
+
+  let close: string;
+  if (winner === "WOLF")
+    close =
+      lynchWrong > lynchWolf
+        ? "Làng thua vì treo nhầm nhiều hơn treo đúng: mỗi lần treo oan là tự giúp Sói thêm một mạng."
+        : keyKills.length
+          ? "Làng thua vì mất các vai phép quá sớm: không còn ai soi và che, ban ngày chỉ còn đoán mò."
+          : "Bầy Sói giữ bài kín tới cuối, làng không kịp lật được đủ Sói.";
+  else if (winner === "VILLAGER")
+    close =
+      lynchWolf > 0 && lynchWrong === 0
+        ? "Làng thắng gọn: lần nào treo cũng trúng Sói, không phí một lá phiếu."
+        : saves + seerHits > 0
+          ? "Làng thắng nhờ các vai phép làm tròn việc: soi ra Sói và giữ được người qua những đêm khó."
+          : "Làng thắng sát nút, có lúc chênh vênh nhưng vẫn lật được bầy Sói.";
+  else if (winner === "LOVERS") close = "Cặp đôi khác phe đi tới cuối cùng: cả làng lẫn bầy Sói đều bị qua mặt.";
+  else if (winner === "WHITE_WOLF") close = "Sói trắng diễn tròn vai, đứng một mình trên đống đổ nát của cả hai phe.";
+  else close = "";
+  if (close) paragraphs.push(close);
+
+  const turning = log
+    .filter((e) => e.tag && TURNING.includes(e.tag))
+    .map((e, i) => ({ e, i, rank: TURNING.indexOf(e.tag!) }))
+    .sort((a, b) => a.rank - b.rank || a.i - b.i)
+    .slice(0, 4)
+    .sort((a, b) => a.i - b.i)
+    .map(({ e }) => ({ when: when(e), text: e.text, impact: e.impact }));
+
+  return { paragraphs, turning };
 }

@@ -85,7 +85,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
     seatPlayers(Array.from({ length: count }, (_, i) => names[i] ?? ""));
     setSkill(level);
     setCustomDeck(null); // để app chia theo trình độ vừa chọn
-    setSetupStep(1);
+    setSetupStep(2);
     onDone();
   };
 

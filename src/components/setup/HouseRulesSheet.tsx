@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { X } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import { elderPunishOf, useGameStore, type ElderPunish, type TieRule } from "@/store/gameStore";
 
 interface Props {
@@ -198,35 +198,30 @@ export function HouseRulesSheet({ open, onClose }: Props) {
 }
 
 /** Danh sách luật nhà (dùng trong bảng trượt và ở bước 3 của màn chuẩn bị). */
-export function HouseRulesList() {
+/** Luật cả bàn hay cãi nhau nhất, luôn hiện. Các luật còn lại nằm trong "Nâng cao". */
+const MAIN_RULES: BoolRule[] = ["revealDeadRoles", "witchSeesVictim"];
+
+/** `compact`: nhóm có người mới thì gập phần nâng cao để màn chuẩn bị gọn. */
+export function HouseRulesList({ compact = false }: { compact?: boolean }) {
   const houseRules = useGameStore((s) => s.houseRules);
   const setHouseRule = useGameStore((s) => s.setHouseRule);
   const isSoundEnabled = useGameStore((s) => s.isSoundEnabled);
   const toggleSound = useGameStore((s) => s.toggleSound);
+  const skill = useGameStore((s) => s.skill);
+  const [advanced, setAdvanced] = useState(!compact || skill !== "NEWBIE");
+  const row = (r: (typeof RULES)[number]) => {
+    const on = houseRules[r.key] ?? r.def;
+    return <Row key={r.key} title={r.title} hint={r.hint} on={on} onToggle={() => setHouseRule(r.key, !on)} />;
+  };
 
   return (
     <div className="border-t border-line">
-              {RULES.map((r) => {
-                const on = houseRules[r.key] ?? r.def;
-                return <Row key={r.key} title={r.title} hint={r.hint} on={on} onToggle={() => setHouseRule(r.key, !on)} />;
-              })}
-              <Segmented
-                title="Phép ban đêm"
-                options={NIGHT_OPTIONS}
-                value={houseRules.forceNightActions ? "FORCE" : "OPTIONAL"}
-                onChange={(v) => setHouseRule("forceNightActions", v === "FORCE")}
-              />
+              {RULES.filter((r) => MAIN_RULES.includes(r.key)).map(row)}
               <Segmented
                 title="Khi hòa phiếu"
                 options={TIE_OPTIONS}
                 value={houseRules.tieRule ?? "ROULETTE"}
                 onChange={(v) => setHouseRule("tieRule", v)}
-              />
-              <Segmented
-                title="Già làng chết dưới tay phe Làng"
-                options={ELDER_OPTIONS}
-                value={elderPunishOf(houseRules)}
-                onChange={(v) => setHouseRule("elderPunish", v)}
               />
               <Row
                 title="Âm thanh"
@@ -234,6 +229,35 @@ export function HouseRulesList() {
                 on={isSoundEnabled}
                 onToggle={toggleSound}
               />
+              <button
+                type="button"
+                onClick={() => setAdvanced((v) => !v)}
+                aria-expanded={advanced}
+                className="flex min-h-16 w-full items-center justify-between border-b border-line text-left"
+              >
+                <span>
+                  <span className="block text-lg font-medium text-bone">Luật nâng cao</span>
+                  <span className="block text-sm text-ash">Bảo vệ tự che, phép ban đêm, Già làng. Để mặc định là chơi được.</span>
+                </span>
+                <ChevronDown className={`size-6 shrink-0 text-ash transition-transform ${advanced ? "rotate-180" : ""}`} strokeWidth={1.5} />
+              </button>
+              {advanced && (
+              <>
+              {RULES.filter((r) => !MAIN_RULES.includes(r.key)).map(row)}
+              <Segmented
+                title="Phép ban đêm"
+                options={NIGHT_OPTIONS}
+                value={houseRules.forceNightActions ? "FORCE" : "OPTIONAL"}
+                onChange={(v) => setHouseRule("forceNightActions", v === "FORCE")}
+              />
+              <Segmented
+                title="Già làng chết dưới tay phe Làng"
+                options={ELDER_OPTIONS}
+                value={elderPunishOf(houseRules)}
+                onChange={(v) => setHouseRule("elderPunish", v)}
+              />
+              </>
+              )}
     </div>
   );
 }

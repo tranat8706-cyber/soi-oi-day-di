@@ -10,7 +10,7 @@ import { StepBack } from "./StepBack";
 import { ShareStory } from "./ShareStory";
 import { useArt } from "@/hooks/useArt";
 import type { ArtName } from "@/constants/themes";
-import { awards, type LogEntry } from "@/utils/gameLog";
+import { awards, verdict, type LogEntry } from "@/utils/gameLog";
 
 const ease = [0.22, 1, 0.36, 1] as const;
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -21,13 +21,20 @@ const GRAIN =
 /** Chữ, màu và quầng sáng theo phe thắng. */
 const WIN_LOOK: Record<Winner, { top: string; text: string; glow: string; size: string; art: ArtName }> = {
   WOLF: { top: "Sói", text: "text-blood", glow: "bg-blood/40", size: "text-[18cqw]", art: "win-wolf" },
-  VILLAGER: { top: "Làng", text: "text-moss", glow: "bg-moss/30", size: "text-[18cqw]", art: "win-village" },
+  // Làng thắng = bình minh: chữ vàng nắng chuyển cam, hợp với ảnh nền thay vì màu xanh lá phẳng.
+  VILLAGER: {
+    top: "Làng",
+    text: "bg-linear-to-b from-[#fff1c9] via-[#f5c15a] to-[#e0832f] bg-clip-text text-transparent drop-shadow-[0_0_2cqw_rgba(245,193,90,0.45)]",
+    glow: "bg-[#f5c15a]/30",
+    size: "text-[18cqw]",
+    art: "win-village",
+  },
   LOVERS: { top: "Cặp đôi", text: "text-rose", glow: "bg-rose/35", size: "text-[15cqw]", art: "win-lovers" },
   WHITE_WOLF: { top: "Sói trắng", text: "text-bone", glow: "bg-bone/20", size: "text-[14cqw]", art: "win-white-wolf" },
 };
 
 /** Màu chủ đạo của ảnh Story theo phe thắng. */
-const STORY_ACCENT: Record<Winner, string> = { WOLF: "#e2464b", VILLAGER: "#5fbf8a", LOVERS: "#e968a5", WHITE_WOLF: "#ece7dd" };
+const STORY_ACCENT: Record<Winner, string> = { WOLF: "#e2464b", VILLAGER: "#f5c15a", LOVERS: "#e968a5", WHITE_WOLF: "#ece7dd" };
 
 /** Lệch nhẹ cho mỗi tấm polaroid, cố định theo vị trí. */
 const tilt = (i: number) => (((i * 37) % 7) - 3) * 0.9;
@@ -144,7 +151,9 @@ export function RecapScreen() {
         </div>
       </motion.section>
 
-      <div className="mt-5 w-full px-safe">
+      <GameDiary players={players} winner={winner} nights={nightNumber} />
+
+      <div className="mt-10 w-full px-safe">
         <ShareStory
           data={() => {
             const log = useGameStore.getState().gameLog;
@@ -166,7 +175,6 @@ export function RecapScreen() {
         />
       </div>
 
-      <GameDiary players={players} />
 
       <div className="mt-8 w-full px-safe pb-safe">
         <motion.button
@@ -277,42 +285,39 @@ function Polaroid({
   );
 }
 
-/** Nhật ký từ đêm 1 tới hết ván: chuyện gì xảy ra, ảnh hưởng ra sao tới các đêm sau, cục diện sau mỗi chặng. */
-function GameDiary({ players }: { players: Player[] }) {
+/** Phân tích ván: sự kiện chính từng chặng (hệ thống tự chấm like / unlike), rồi nhận xét tổng ván. */
+function GameDiary({ players, winner, nights }: { players: Player[]; winner: Winner | null; nights: number }) {
   const log = useGameStore((s) => s.gameLog);
-  const votes = useGameStore((s) => s.logVotes);
-  const voteLog = useGameStore((s) => s.voteLog);
   if (!log.length) return null;
   const { best, worst } = awards(log);
+  const v = verdict(log, winner, nights);
   const nameOf = (id?: string) => players.find((p) => p.id === id)?.name;
   // Gom theo từng chặng: Đêm 1, Ngày 1, Đêm 2…
-  const chapters: { key: string; title: string; items: { e: LogEntry; i: number }[] }[] = [];
-  log.forEach((e, i) => {
+  const chapters: { key: string; title: string; items: LogEntry[] }[] = [];
+  for (const e of log) {
     const key = `${e.phase}-${e.round}`;
     let ch = chapters.at(-1);
     if (!ch || ch.key !== key) {
       ch = { key, title: `${e.phase === "NIGHT" ? "Đêm" : "Ngày"} ${e.round}`, items: [] };
       chapters.push(ch);
     }
-    ch.items.push({ e, i });
-  });
-  const likes = Object.values(votes).filter((v) => v === 1).length;
-  const unlikes = Object.values(votes).filter((v) => v === -1).length;
+    ch.items.push(e);
+  }
 
   return (
-    <section className="mt-10 w-full px-safe" aria-label="Nhật ký ván">
+    <section className="mt-10 w-full px-safe" aria-label="Phân tích ván">
       <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">Phân tích ván · đêm 1 tới hạ màn</p>
       <h2 className="mt-2 pt-[0.1em] font-display text-[clamp(2.5rem,12vw,4rem)] uppercase leading-[1.18] text-bone">
         Ván này ra sao<span className="text-blood">?</span>
       </h2>
-      <p className="mt-2 text-sm leading-snug text-ash">
-        Mỗi pha kèm hệ quả cho các đêm sau. Cả bàn cùng chấm: pha nào đỉnh thì like, pha nào muốn quên thì unlike.
-        {(likes > 0 || unlikes > 0) && (
-          <span className="text-bone">
-            {" "}
-            {likes} like · {unlikes} unlike.
-          </span>
-        )}
+      <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm leading-snug text-ash">
+        <span className="inline-flex items-center gap-1">
+          <ThumbsUp className="size-4 text-moss" strokeWidth={2} fill="currentColor" /> pha hay
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <ThumbsDown className="size-4 text-blood" strokeWidth={2} fill="currentColor" /> pha hỏng
+        </span>
+        <span>· hệ thống tự chấm theo người ra tay</span>
       </p>
 
       {(best || worst) && (
@@ -336,43 +341,30 @@ function GameDiary({ players }: { players: Player[] }) {
 
       <ol className="mt-6 border-l border-line">
         {chapters.map((ch) => (
-          <li key={ch.key} className="relative pb-7 pl-5">
+          <li key={ch.key} className="relative pb-6 pl-5">
             <span
               aria-hidden
               className={`absolute -left-[5px] top-1.5 size-[9px] rounded-full ${ch.key.startsWith("NIGHT") ? "bg-blood" : "bg-bone"}`}
             />
             <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-bone">{ch.title}</p>
-            <ul className="mt-3 flex flex-col gap-4">
-              {ch.items.map(({ e, i }) =>
+            <ul className="mt-3 flex flex-col gap-2.5">
+              {ch.items.map((e, i) =>
                 e.tone === "status" ? (
                   <li key={i}>
                     <StatusBar entry={e} />
                   </li>
                 ) : (
-                  <li key={i}>
+                  <li key={i} className="flex items-start gap-2.5">
+                    <span className="mt-0.5 grid size-6 shrink-0 place-items-center">
+                      {e.tone === "good" ? (
+                        <ThumbsUp className="size-4 text-moss" strokeWidth={2} fill="currentColor" aria-label="Pha hay" />
+                      ) : e.tone === "bad" ? (
+                        <ThumbsDown className="size-4 text-blood" strokeWidth={2} fill="currentColor" aria-label="Pha hỏng" />
+                      ) : (
+                        <span className="size-1.5 rounded-full bg-ash" />
+                      )}
+                    </span>
                     <p className="text-[15px] leading-snug text-bone">{e.text}</p>
-                    {e.impact && <p className="mt-1 text-[13px] leading-snug text-ash">→ {e.impact}</p>}
-                    <div className="mt-1.5 flex gap-1">
-                      {([1, -1] as const).map((v) => {
-                        const on = votes[i] === v;
-                        const Icon = v === 1 ? ThumbsUp : ThumbsDown;
-                        return (
-                          <motion.button
-                            key={v}
-                            type="button"
-                            whileTap={{ scale: 1.3 }}
-                            onClick={() => voteLog(i, v)}
-                            aria-pressed={on}
-                            aria-label={v === 1 ? "Like pha này" : "Unlike pha này"}
-                            className={`grid size-10 place-items-center rounded-full border transition-colors ${
-                              on ? (v === 1 ? "border-moss bg-moss/20 text-moss" : "border-blood bg-blood/20 text-blood") : "border-line text-ash"
-                            }`}
-                          >
-                            <Icon className="size-4" strokeWidth={2} fill={on ? "currentColor" : "none"} />
-                          </motion.button>
-                        );
-                      })}
-                    </div>
                   </li>
                 ),
               )}
@@ -380,6 +372,33 @@ function GameDiary({ players }: { players: Player[] }) {
           </li>
         ))}
       </ol>
+
+      {(v.paragraphs.length > 0 || v.turning.length > 0) && (
+        <div className="mt-4 rounded-2xl border border-bone/25 bg-ink-2 px-5 py-5">
+          <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-ash">Nhận xét tổng ván</p>
+          <div className="mt-3 flex flex-col gap-3">
+            {v.paragraphs.map((t, i) => (
+              <p key={i} className="text-[15px] leading-relaxed text-bone/90">
+                {t}
+              </p>
+            ))}
+          </div>
+          {v.turning.length > 0 && (
+            <>
+              <p className="mt-5 font-mono text-[10px] uppercase tracking-[0.25em] text-ash">Bước ngoặt · đêm trước kéo theo đêm sau</p>
+              <ol className="mt-3 flex flex-col gap-3">
+                {v.turning.map((t, i) => (
+                  <li key={i} className="border-l-2 border-blood pl-3">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-blood">{t.when}</p>
+                    <p className="mt-0.5 text-[15px] leading-snug text-bone">{t.text}</p>
+                    {t.impact && <p className="mt-1 text-[13px] leading-snug text-ash">{t.impact}</p>}
+                  </li>
+                ))}
+              </ol>
+            </>
+          )}
+        </div>
+      )}
     </section>
   );
 }
@@ -402,7 +421,6 @@ function StatusBar({ entry }: { entry: LogEntry }) {
         <span className="bg-blood" style={{ width: `${(wolves / total) * 100}%` }} />
         <span className="bg-moss" style={{ width: `${(village / total) * 100}%` }} />
       </div>
-      {entry.impact && <p className="mt-2 text-[13px] leading-snug text-bone/80">{entry.impact}</p>}
     </div>
   );
 }
