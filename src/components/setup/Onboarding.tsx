@@ -1,5 +1,8 @@
 "use client";
 
+import Image from "next/image";
+import { THEMES, artSrc, cardSrc } from "@/constants/themes";
+import type { RoleId } from "@/constants/roles";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, BookOpen, Eye, Gavel, Lock, Moon, Smartphone, Users } from "lucide-react";
@@ -162,9 +165,13 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
               exit={{ opacity: 0, x: -40 * dir, filter: "blur(6px)" }}
               transition={{ duration: 0.45, ease }}
             >
-              <span className="grid size-20 place-items-center rounded-full border border-blood/50 bg-blood/10">
-                <Icon className="size-9 text-blood" strokeWidth={1.5} />
-              </span>
+              {i === 0 || i === 2 ? (
+                <CardFan ids={i === 0 ? ["WOLF", "SEER", "WITCH"] : [null, "GUARD", null]} />
+              ) : (
+                <span className="grid size-20 place-items-center rounded-full border border-blood/50 bg-blood/10">
+                  <Icon className="size-9 text-blood" strokeWidth={1.5} />
+                </span>
+              )}
               <p className="mt-8 font-mono text-[11px] uppercase tracking-[0.25em] text-ash">{s.kicker}</p>
               <h2 className="mt-3 pt-[0.08em] font-display text-[clamp(3.25rem,16vw,6rem)] uppercase leading-[1.18] text-bone">
                 {s.title[0]}
@@ -386,5 +393,31 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
       </div>
       <Handbook open={bookOpen} onClose={() => setBookOpen(false)} />
     </motion.div>
+  );
+}
+
+/** Quạt 3 lá bài bộ Truyền thống cho phần giới thiệu. `null` là mặt sau. */
+function CardFan({ ids }: { ids: (RoleId | null)[] }) {
+  return (
+    <span className="relative block h-36 w-48">
+      {ids.map((id, k) => (
+        <motion.span
+          key={k}
+          className="absolute bottom-0 left-1/2 block aspect-9/16 h-32 overflow-hidden rounded-lg border border-line shadow-[0_8px_24px_rgba(0,0,0,0.6)]"
+          initial={{ rotate: 0, x: "-50%", opacity: 0 }}
+          animate={{ rotate: (k - 1) * 14, x: `calc(-50% + ${(k - 1) * 38}px)`, opacity: 1 }}
+          transition={{ delay: 0.15 + k * 0.08, duration: 0.5, ease }}
+          style={{ transformOrigin: "50% 100%", zIndex: k === 1 ? 2 : 1 }}
+        >
+          <Image
+            src={id ? cardSrc(THEMES.classic, id)! : artSrc(THEMES.classic, "card-back")}
+            alt=""
+            fill
+            sizes="72px"
+            className="object-cover"
+          />
+        </motion.span>
+      ))}
+    </span>
   );
 }

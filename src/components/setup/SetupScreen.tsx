@@ -6,7 +6,7 @@ import { ArrowLeft, ArrowRight, Check, CircleHelp, Dices, Plus, SlidersHorizonta
 import { MAX_PLAYERS, MIN_PLAYERS, useGameStore, type SetupStep } from "@/store/gameStore";
 import { unlockAudio } from "@/utils/audio";
 import { track } from "@/utils/analytics";
-import { balanceVerdict, rebalance, type DeckConfig } from "@/utils/balancer";
+import { balanceVerdict, rebalance, villageWinRate, type DeckConfig } from "@/utils/balancer";
 import { SPECIAL_ROLES } from "@/constants/roles";
 import { DeckSummary } from "../DeckSummary";
 import { PlayerRow } from "./PlayerRow";
@@ -73,7 +73,8 @@ export function SetupScreen() {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [bookOpen, setBookOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
-  const [lopsidedOpen, setLopsidedOpen] = useState(false);
+  /** Cảnh báo bộ lệch: mở khi rời bước bộ bài ("deck") hoặc khi bấm chia bài ("start"). */
+  const [lopsidedOpen, setLopsidedOpen] = useState<false | "deck" | "start">(false);
   const addRef = useRef<HTMLInputElement>(null);
 
   const deck = useCurrentDeck();
@@ -117,13 +118,18 @@ export function SetupScreen() {
   /** Rời bước bộ bài: bộ tự chọn lệch nặng thì hỏi lại. */
   const leaveDeckStep = () => {
     if (deck.custom && verdict.level === "lopsided") {
-      setLopsidedOpen(true);
+      setLopsidedOpen("deck");
       return;
     }
     go(3);
   };
 
-  const onStart = () => {
+  /** Bấm chia bài: bộ lệch nặng (một phe gần như chắc thắng) thì cảnh báo ngay. */
+  const onStart = (force = false) => {
+    if (!force && verdict.level === "lopsided") {
+      setLopsidedOpen("start");
+      return;
+    }
     void unlockAudio(); // phải gọi trong chính cử chỉ chạm
     track("game_started", {
       players: players.length,
@@ -143,7 +149,7 @@ export function SetupScreen() {
       : step === 2
         ? { key: "s2", label: "Tiếp · luật chơi", onClick: leaveDeckStep }
         : sessionTitle.trim()
-          ? { key: "s3", label: "Bắt đầu chia bài", onClick: onStart }
+          ? { key: "s3", label: "Bắt đầu chia bài", onClick: () => onStart() }
           : null;
 
   return (
@@ -438,7 +444,7 @@ export function SetupScreen() {
                   whileTap={{ scale: 0.97 }}
                   transition={{ type: "spring", stiffness: 420, damping: 32 }}
                   className={`group flex h-20 w-full items-center justify-between rounded-2xl px-6 ${
-                    step === 3 ? "bg-blood text-bone" : "bg-bone text-ink"
+                    step === 3 ? "cta-pulse-blood bg-blood text-bone" : "bg-bone text-ink"
                   }`}
                 >
                   <span className="font-display text-3xl uppercase leading-[1.08]">{cta.label}</span>
@@ -508,6 +514,9 @@ export function SetupScreen() {
               <p className="mt-2 pt-[0.1em] font-display text-[clamp(2rem,9vw,2.75rem)] uppercase leading-[1.18] text-bone">
                 Phe {verdict.favored === "VILLAGE" ? "Làng" : "Sói"} quá mạnh
               </p>
+              <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.2em] text-blood">
+                Ước tính thắng khoảng {Math.round(Math.max(villageWinRate(deck.counts), 1 - villageWinRate(deck.counts)) * 100)}%
+              </p>
               <p className="mt-2 text-sm leading-snug text-ash">
                 Với bộ bài này, phe {verdict.favored === "VILLAGE" ? "Làng" : "Sói"} gần như chắc thắng. Cân bằng lại cho cả bàn cùng vui?
               </p>
@@ -522,6 +531,8 @@ export function SetupScreen() {
                     const current: DeckConfig = { WOLF: deck.counts.WOLF };
                     for (const id of SPECIAL_ROLES) current[id] = deck.counts[id];
                     setCustomDeck(rebalance(deck.n, current));
+                    // Bấm chia bài mà bị lệch: cân bằng xong quay về bước bộ bài cho cả bàn xem lại.
+                    if (lopsidedOpen === "start") go(2);
                     setLopsidedOpen(false);
                   }}
                   className="flex h-16 w-full items-center justify-center rounded-2xl bg-bone text-ink"
@@ -531,12 +542,14 @@ export function SetupScreen() {
                 <button
                   type="button"
                   onClick={() => {
+                    const from = lopsidedOpen;
                     setLopsidedOpen(false);
-                    go(3);
+                    if (from === "start") onStart(true);
+                    else go(3);
                   }}
                   className="min-h-16 w-full font-mono text-[11px] uppercase tracking-[0.2em] text-ash active:text-bone"
                 >
-                  Kệ, vẫn đi tiếp
+                  {lopsidedOpen === "start" ? "Kệ, vẫn chia bài" : "Kệ, vẫn đi tiếp"}
                 </button>
               </div>
             </motion.div>
@@ -610,7 +623,7 @@ function ThemePicker() {
       </div>
       {note && (
         <p className="mt-3 rounded-2xl border border-line px-4 py-3 text-sm leading-snug text-ash">
-          Bộ <span className="text-bone">Gợi cảm</span> sẽ mở trong bản Pro, sắp ra mắt. Tạm thời cả bàn dùng bộ Truyền thống nhé.
+          Bộ <span className="text-bone">Sexy</span> sẽ mở trong bản Pro, sắp ra mắt. Tạm thời cả bàn dùng bộ Truyền thống nhé.
         </p>
       )}
     </section>

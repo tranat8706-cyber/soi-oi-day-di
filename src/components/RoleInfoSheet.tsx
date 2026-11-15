@@ -6,10 +6,13 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { getRole, isWolfRole, type RoleId } from "@/constants/roles";
 import { useArt } from "@/hooks/useArt";
+import { THEMES, cardSrc } from "@/constants/themes";
 
 /** Bảng trượt giới thiệu một vai: ảnh lá bài + chức năng. Dùng khi cả bàn đang chọn bộ bài. */
-export function RoleInfoSheet({ id, onClose }: { id: RoleId | null; onClose: () => void }) {
-  const { card } = useArt();
+export function RoleInfoSheet({ id, onClose, classic = false }: { id: RoleId | null; onClose: () => void; classic?: boolean }) {
+  const art = useArt();
+  // Phần giới thiệu (Sổ tay) luôn dùng bộ Truyền thống.
+  const card = (rid: RoleId) => (classic ? cardSrc(THEMES.classic, rid) : art.card(rid));
   const role = getRole(id);
 
   useEffect(() => {

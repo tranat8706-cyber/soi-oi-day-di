@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { MORNING_SAY, fill, pickScript } from "@/constants/scripts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { isWolfRole, looksLikeWolf } from "@/constants/roles";
@@ -119,6 +120,8 @@ interface GameStore {
   onboarded: boolean;
   /** Trình độ của nhóm, quyết định bộ tự cân bằng. */
   skill: SkillLevel;
+  /** Số ván đã chơi, để luân phiên kịch bản lời dẫn (mỗi thứ 6 bản). */
+  gameNo: number;
   setSkill: (v: SkillLevel) => void;
   /** Bộ hình lá bài. */
   theme: ThemeId;
@@ -395,13 +398,11 @@ const joinNames = (names: string[]) =>
   names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} và ${names.at(-1)}`;
 
 /** Không tiết lộ nguyên nhân chết (Sói, bình độc, đau lòng…), chỉ nói ai đã ra đi. */
-export function buildMorningScript(victimNames: string[]) {
-  if (victimNames.length === 0)
-    return "Đêm qua vô cùng tĩnh lặng, không có ai ngã xuống. Làng đang được thần linh che chở.";
+/** Lời công bố buổi sáng, đổi cách nói theo `variant` (số ván + số đêm). */
+export function buildMorningScript(victimNames: string[], variant = 0) {
+  if (victimNames.length === 0) return pickScript(MORNING_SAY.none, variant);
   const who = joinNames(victimNames);
-  return victimNames.length === 1
-    ? `Đêm qua là một đêm đẫm máu. ${who} đã ra đi. Xin mời ${who} để lại di ngôn trước khi rời làng.`
-    : `Đêm qua là một đêm đẫm máu. Cả ${who} đều đã ra đi. Xin mời từng người để lại di ngôn.`;
+  return fill(pickScript(victimNames.length === 1 ? MORNING_SAY.one : MORNING_SAY.many, variant), who);
 }
 
 /** Chụp trạng thái ván hiện tại (bỏ ảnh đại diện cho nhẹ) rồi đẩy vào ngăn lùi. */
@@ -446,6 +447,7 @@ export const useGameStore = create<GameStore>()(
 
       setOnboarded: (onboarded) => set({ onboarded }),
       skill: "MIXED",
+      gameNo: 0,
       setSkill: (skill) => set({ skill }),
       theme: "classic",
       setTheme: (theme) => set({ theme }),
@@ -535,6 +537,7 @@ export const useGameStore = create<GameStore>()(
       assignRoles: () =>
         set((s) => ({
           ...freshRound,
+          gameNo: (s.gameNo ?? 0) + 1,
           gameState: "PASS_AND_PLAY",
           players: balanceRoles(resetPlayers(s.players), s.customDeck, s.autoSeed, s.skill),
         })),
@@ -648,7 +651,7 @@ export const useGameStore = create<GameStore>()(
           const res = applyDeaths(players, kills, ctx);
           // Đọc tên theo thứ tự chỗ ngồi để không lộ ai chết vì gì, ai chết cùng ai.
           const victims = res.players.filter((p) => res.died.some((d) => d.id === p.id));
-          const morningScript = buildMorningScript(victims.map((p) => p.name));
+          const morningScript = buildMorningScript(victims.map((p) => p.name), (s.gameNo ?? 0) + s.nightNumber);
           const hunterId = !lost ? res.hunterId : null;
           // Luật nhà: Già làng chết vì phe Làng (độc, cảm tử) thì làng mất phép.
           const elderByVillage =
@@ -887,6 +890,7 @@ export const useGameStore = create<GameStore>()(
           isSoundEnabled: s.isSoundEnabled,
           customDeck: s.customDeck,
           skill: s.skill,
+          gameNo: s.gameNo,
           theme: s.theme,
           autoSeed: s.autoSeed,
         };

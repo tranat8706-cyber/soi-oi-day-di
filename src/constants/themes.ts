@@ -30,7 +30,7 @@ export const THEMES: Record<ThemeId, Theme> = {
   },
   sexy: {
     id: "sexy",
-    name: "Gợi cảm",
+    name: "Sexy",
     blurb: "Gothic tối, nhân vật quyến rũ. Dành cho hội bạn thân lớn tuổi.",
     pro: true,
     card: { w: 720, h: 980 },

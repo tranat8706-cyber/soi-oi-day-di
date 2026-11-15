@@ -1,5 +1,6 @@
 "use client";
 
+import { GM_CALL, NIGHTFALL_SAY, pickScript } from "@/constants/scripts";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
@@ -170,10 +171,17 @@ export function NightScreen() {
   const [nudge, setNudge] = useState(false);
   const [deckOpen, setDeckOpen] = useState(false);
   const stepRefs = useRef<Record<string, HTMLLIElement | null>>({});
+  const wakeRef = useRef<HTMLButtonElement>(null);
   const toastSeq = useRef(0);
 
+  // Lần mở màn đêm đầu tiên không cuộn, để Quản trò đọc câu mở màn trước.
+  const firstOpen = useRef(true);
   useEffect(() => {
     if (!openId) return;
+    if (firstOpen.current) {
+      firstOpen.current = false;
+      return;
+    }
     const el = stepRefs.current[openId];
     // Đợi accordion mở xong một nhịp rồi mới cuộn.
     const t = setTimeout(() => el?.scrollIntoView({ behavior: "smooth", block: "start" }), 220);
@@ -633,10 +641,12 @@ export function NightScreen() {
           </motion.h1>
         </div>
 
-        <div className="mt-6 flex items-center gap-3 rounded-2xl border border-blood/40 bg-blood/10 px-4 py-3">
-          <EyeOff className="size-5 shrink-0 text-blood" strokeWidth={1.75} />
-          <p className="text-sm leading-snug text-bone/90">
-            Chỉ <span className="font-semibold text-bone">Quản trò</span> được nhìn màn hình. Cả làng nhắm mắt.
+        <div className="mt-6 rounded-2xl border border-blood/40 bg-blood/10 px-4 py-4">
+          <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-blood">Quản trò đọc to · mở màn đêm</p>
+          <p className="mt-2 text-xl leading-snug text-bone">“{pickScript(NIGHTFALL_SAY, (s.gameNo ?? 0) + nightNumber)}”</p>
+          <p className="mt-3 flex items-center gap-2 text-sm leading-snug text-bone/70">
+            <EyeOff className="size-4 shrink-0 text-blood" strokeWidth={1.75} />
+            Từ giờ chỉ Quản trò nhìn màn hình. Gọi từng vai theo thứ tự bên dưới.
           </p>
         </div>
 
@@ -735,7 +745,7 @@ export function NightScreen() {
                     >
                       <div className="px-4 pb-4">
                         <p className="border-l-2 border-blood pl-4 text-xl leading-relaxed text-bone/85">
-                          “<RoleText text={role.gmInstruction} />”
+                          “<RoleText text={pickScript(GM_CALL[role.id] ?? [role.gmInstruction], s.gameNo ?? 0)} />”
                         </p>
                         {(RULE_SAY[rid] || (OPTIONAL_SAY[rid] && canSkip(rid))) && !blocked && (
                           <div className="mt-3 rounded-xl border border-bone/20 bg-ink px-4 py-3">
@@ -759,6 +769,18 @@ export function NightScreen() {
                           </p>
                         )}
 
+                        {!blocked && canSkip(rid) && (
+                          <button
+                            type="button"
+                            onClick={() => (skips.includes(rid) ? s.setNightSkip(rid, false) : skipStep(rid, next?.id ?? null))}
+                            aria-pressed={skips.includes(rid)}
+                            className={`mt-4 flex min-h-14 w-full items-center justify-center rounded-xl border font-mono text-[11px] uppercase tracking-[0.18em] transition-colors ${
+                              skips.includes(rid) ? "border-bone bg-bone/15 text-bone" : "border-dashed border-bone/45 bg-ink-2 text-bone/90 active:bg-bone/10"
+                            }`}
+                          >
+                            {skips.includes(rid) ? `✓ ${SKIP_LABEL[rid] ?? "Không dùng"} · chạm để bỏ` : `Lắc đầu? · ${SKIP_LABEL[rid] ?? "Đêm nay không dùng"}`}
+                          </button>
+                        )}
                         {blocked ? (
                           <p className="mt-5 text-sm leading-relaxed text-ash">
                             {blocked === "dead"
@@ -776,18 +798,6 @@ export function NightScreen() {
                           stepBody(role)
                         )}
 
-                        {!blocked && canSkip(rid) && (
-                          <button
-                            type="button"
-                            onClick={() => (skips.includes(rid) ? s.setNightSkip(rid, false) : skipStep(rid, next?.id ?? null))}
-                            aria-pressed={skips.includes(rid)}
-                            className={`mt-5 flex min-h-14 w-full items-center justify-center rounded-xl border font-mono text-[11px] uppercase tracking-[0.18em] transition-colors ${
-                              skips.includes(rid) ? "border-bone bg-bone/15 text-bone" : "border-dashed border-bone/45 bg-ink-2 text-bone/90 active:bg-bone/10"
-                            }`}
-                          >
-                            {skips.includes(rid) ? `Đã chọn: ${SKIP_LABEL[rid] ?? "không dùng"} · chạm để bỏ` : (SKIP_LABEL[rid] ?? "Đêm nay không dùng")}
-                          </button>
-                        )}
                         {!blocked && !canSkip(rid) && (
                           <p className="mt-5 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-ash">
                             Luật nhà: bắt buộc dùng mỗi đêm
@@ -798,15 +808,23 @@ export function NightScreen() {
                           data-step-done
                           onClick={() => {
                             if (next) setOpenId(next.id);
-                            else if (!remindPending()) setOpenId(null);
+                            else if (!remindPending()) {
+                              setOpenId(null);
+                              // Hết vòng gọi: đưa Quản trò tới nút Gọi làng dậy.
+                              setTimeout(() => wakeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 350);
+                            }
                           }}
                           whileTap={{ scale: 0.97 }}
                           className={`mt-5 flex h-16 w-full items-center justify-between rounded-xl px-5 transition-colors ${
-                            done || blocked ? "bg-bone text-ink" : "border border-bone/40 text-bone active:bg-ink"
+                            done || blocked ? "cta-pulse bg-bone text-ink" : "border border-bone/40 text-bone active:bg-ink"
                           }`}
                         >
                           <span className="font-display text-2xl uppercase leading-[1.08]">
-                            {next ? `Xong · gọi ${next.id === "WOLF" ? "bầy Sói" : next.name}` : "Xong · thu gọn"}
+                            {next
+                              ? `Xong · gọi ${next.id === "WOLF" ? "bầy Sói" : next.name}`
+                              : pendingSteps.length
+                                ? "Xong · xem bước còn sót"
+                                : "Xong · tới gọi làng dậy"}
                           </span>
                           <ChevronDown className="size-6 shrink-0" strokeWidth={2} />
                         </motion.button>
@@ -843,17 +861,18 @@ export function NightScreen() {
             </div>
           )}
           <motion.button
+            ref={wakeRef}
             type="button"
             onClick={onWake}
             whileTap={{ scale: 0.97 }}
-            className={`flex h-20 w-full items-center justify-between rounded-2xl px-6 transition-colors ${
+            className={`flex h-20 w-full scroll-mt-24 items-center justify-between rounded-2xl px-6 transition-colors ${
               requiredPending.length
                 ? "border border-dashed border-line text-ash"
                 : confirmWake
                   ? "bg-blood text-bone"
                   : pendingSteps.length || missingBite
                     ? "border border-line text-bone"
-                    : "bg-bone text-ink"
+                    : "cta-pulse bg-bone text-ink"
             }`}
           >
             <span className="min-w-0 text-left">

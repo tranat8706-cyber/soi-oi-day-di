@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { BookOpen, Moon, Sun, Vote, X } from "lucide-react";
 import { ROLE_ORDER, ROLES, isWolfRole, type RoleId } from "@/constants/roles";
 import { NEWBIE_OK } from "@/utils/balancer";
-import { useArt } from "@/hooks/useArt";
+import { THEMES, cardSrc } from "@/constants/themes";
 import { RoleInfoSheet } from "./RoleInfoSheet";
 
 type Tab = "rules" | "roles";
@@ -84,7 +84,7 @@ export function Handbook({ open, onClose, onReplayGuide }: { open: boolean; onCl
               {tab === "rules" ? <Rules onReplayGuide={onReplayGuide} /> : <Roles onPick={setInfo} />}
             </div>
           </div>
-          <RoleInfoSheet id={info} onClose={() => setInfo(null)} />
+          <RoleInfoSheet id={info} onClose={() => setInfo(null)} classic />
         </motion.div>
       )}
     </AnimatePresence>
@@ -174,7 +174,8 @@ const Rule = ({ children }: { children: React.ReactNode }) => (
 );
 
 function Roles({ onPick }: { onPick: (id: RoleId) => void }) {
-  const { card } = useArt();
+  // Phần giới thiệu luôn dùng bộ Truyền thống (bộ mặc định), không theo bộ hình đang chọn.
+  const card = (id: RoleId) => cardSrc(THEMES.classic, id);
   const groups: { title: string; tone: string; ids: RoleId[] }[] = [
     { title: "Phe Sói", tone: "text-blood", ids: ROLE_ORDER.filter((id) => isWolfRole(id) && !SOLO.has(id)) },
     { title: "Phe Làng", tone: "text-bone", ids: ROLE_ORDER.filter((id) => !isWolfRole(id) && !SOLO.has(id)) },

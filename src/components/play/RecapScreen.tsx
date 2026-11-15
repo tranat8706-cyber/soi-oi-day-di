@@ -57,6 +57,7 @@ export function RecapScreen() {
   const endReason = useGameStore((s) => s.endReason);
   const trollTitles = useGameStore((s) => s.trollTitles);
   const rematch = useGameStore((s) => s.rematch);
+  const gameNo = useGameStore((s) => s.gameNo ?? 1);
   const backToSetup = useGameStore((s) => s.backToSetup);
   const setOnboarded = useGameStore((s) => s.setOnboarded);
   const [date] = useState(() =>
@@ -71,7 +72,7 @@ export function RecapScreen() {
   return (
     <div className="mx-auto flex w-full max-w-xl flex-1 flex-col items-center pt-safe">
       <div className="flex w-full items-center justify-between px-safe">
-        <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">06 — Hạ màn · chụp để đăng Story</p>
+        <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">06 — Hạ màn · ván #{gameNo} của nhóm</p>
         <span className="-mr-3">
           <StepBack />
         </span>
@@ -185,7 +186,10 @@ export function RecapScreen() {
           whileTap={{ scale: 0.97 }}
           className="flex h-20 w-full items-center justify-between rounded-2xl bg-bone px-6 text-ink"
         >
-          <span className="font-display text-[clamp(1.4rem,6vw,1.9rem)] uppercase leading-[1.08]">Chơi ván mới với nhóm này</span>
+          <span className="text-left">
+            <span className="block font-display text-[clamp(1.4rem,6vw,1.9rem)] uppercase leading-[1.08]">Chơi ván mới với nhóm này</span>
+            <span className="block font-mono text-[10px] uppercase tracking-[0.18em] text-ink/60">Ván #{gameNo + 1} · chọn lại bộ bài</span>
+          </span>
           <RotateCcw className="size-7 shrink-0" strokeWidth={2} />
         </motion.button>
         <motion.button

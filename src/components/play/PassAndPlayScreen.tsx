@@ -26,6 +26,7 @@ export function PassAndPlayScreen() {
   const seenCount = players.filter((p) => seen.has(p.id)).length;
   const remaining = players.length - seenCount;
   const allSeen = players.length > 0 && remaining === 0;
+  const nextId = players.find((p) => !seen.has(p.id))?.id;
   const active = players.find((p) => p.id === activeId) ?? null;
 
   // Chưa ai xem bài thì quay lại luôn; có người xem rồi thì hỏi lại (bài sẽ chia lại từ đầu).
@@ -91,6 +92,8 @@ export function PassAndPlayScreen() {
         <ul className="mt-8 grid grid-cols-2 gap-3">
           {players.map((p, i) => {
             const done = seen.has(p.id);
+            // Người kế tiếp theo vòng ngồi: sáng lên để Quản trò đưa máy đúng người.
+            const isNext = !done && p.id === nextId;
             return (
               <motion.li
                 key={p.id}
@@ -101,12 +104,15 @@ export function PassAndPlayScreen() {
                 <button
                   type="button"
                   disabled={done}
+                  data-next-player={isNext ? "" : undefined}
                   onClick={() => setActiveId(p.id)}
                   aria-label={done ? `${p.name}, đã xem bài` : `${p.name}, chạm để xem bài`}
                   className={`flex min-h-20 w-full items-center gap-3 rounded-2xl border px-3 text-left transition-[opacity,border-color,transform] duration-500 ${
                     done
                       ? "border-transparent bg-transparent opacity-50"
-                      : "border-line bg-ink-2 active:scale-[0.97] active:border-bone"
+                      : isNext
+                        ? "cta-pulse border-bone bg-ink-2 active:scale-[0.97]"
+                        : "border-line bg-ink-2 active:scale-[0.97] active:border-bone"
                   }`}
                 >
                   <span className="relative grid size-12 shrink-0 place-items-center overflow-hidden rounded-full bg-line font-display text-lg uppercase text-bone">
@@ -128,6 +134,9 @@ export function PassAndPlayScreen() {
                     }`}
                   >
                     {p.name}
+                    {isNext && (
+                      <span className="mt-1 block font-mono text-[9px] uppercase tracking-[0.18em] text-ash">Tới lượt · đưa máy</span>
+                    )}
                   </span>
                 </button>
               </motion.li>
@@ -151,7 +160,7 @@ export function PassAndPlayScreen() {
                   exit={{ opacity: 0, y: 24 }}
                   whileTap={{ scale: 0.97 }}
                   transition={{ type: "spring", stiffness: 420, damping: 32 }}
-                  className="flex h-20 w-full items-center justify-between rounded-2xl bg-blood px-6 text-bone"
+                  className="cta-pulse-blood flex h-20 w-full items-center justify-between rounded-2xl bg-blood px-6 text-bone"
                 >
                   <span className="font-display text-3xl uppercase leading-[1.08]">Cả làng đi ngủ</span>
                   <Moon className="size-7" strokeWidth={2} />
@@ -183,6 +192,8 @@ export function PassAndPlayScreen() {
             onDone={() => {
               markRevealed(active.id);
               setActiveId(null);
+              // Cuộn tới người kế tiếp (hoặc nút đi ngủ khi đã xem hết).
+              setTimeout(() => document.querySelector("[data-next-player]")?.scrollIntoView({ behavior: "smooth", block: "center" }), 300);
             }}
           />
         )}

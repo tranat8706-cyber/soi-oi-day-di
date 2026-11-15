@@ -1,9 +1,10 @@
 "use client";
 
+import { VERDICT_SAY, fill, pickScript } from "@/constants/scripts";
 import { FolkAvatar, avatarSeedOf } from "@/components/FolkAvatar";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Crosshair, Dices, Gavel, Moon, Skull, Timer } from "lucide-react";
+import { ArrowDown, Crosshair, Dices, Gavel, Moon, Skull, Timer } from "lucide-react";
 import Image from "next/image";
 import { getRole } from "@/constants/roles";
 import { elderPunishOf, useGameStore, type Player } from "@/store/gameStore";
@@ -60,6 +61,7 @@ export function DayScreen() {
   const backToSetup = useGameStore((s) => s.backToSetup);
   const houseRules = useGameStore((s) => s.houseRules);
   const skill = useGameStore((s) => s.skill);
+  const gameNo = useGameStore((s) => s.gameNo ?? 0);
   const tieRule = houseRules.tieRule ?? "ROULETTE";
   const revealRoles = houseRules.revealDeadRoles === true;
 
@@ -70,6 +72,20 @@ export function DayScreen() {
   const [revote, setRevote] = useState<string[] | null>(null);
   const [rouletteOpen, setRouletteOpen] = useState(false);
   const hangTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const voteRef = useRef<HTMLElement>(null);
+  /** Người lên giàn đã hết giờ bào chữa (theo id, đổi người thì tự hết). */
+  const [timeUpId, setTimeUpId] = useState<string | null>(null);
+  const onTimeUp = useCallback(() => setTimeUpId(accusedId ?? null), [accusedId]);
+  const [confirmSkip, setConfirmSkip] = useState(false);
+  const onSkipLynch = () => {
+    if (!confirmSkip) {
+      setConfirmSkip(true);
+      setTimeout(() => setConfirmSkip(false), 2500);
+      return;
+    }
+    setConfirmSkip(false);
+    startNextNight();
+  };
 
   const alivePlayers = players.filter((p) => p.isAlive);
   const bloody = lastVictimIds.length > 0;
@@ -111,6 +127,17 @@ export function DayScreen() {
   useEffect(() => () => {
     if (hangTimer.current) clearTimeout(hangTimer.current);
   }, []);
+
+  // Tự cuộn tới việc Quản trò cần làm mỗi khi ngày chuyển bước.
+  useEffect(() => {
+    if (phase === "vote") return;
+    const t = setTimeout(() => {
+      const target = phase === "verdict" ? document.querySelector("[data-verdict]") : null;
+      if (target) target.scrollIntoView({ behavior: "smooth", block: "center" });
+      else window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 250);
+    return () => clearTimeout(t);
+  }, [phase]);
 
   const onAbortTap = () => {
     if (!confirmAbort) {
@@ -197,6 +224,7 @@ export function DayScreen() {
               voters={voters}
               idiotMuted={!!idiotRevealedId && alivePlayers.some((p) => p.id === idiotRevealedId)}
               onCancel={cancelTrial}
+              onTimeUp={onTimeUp}
             />
           ) : (
             <motion.div key="day" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
@@ -265,6 +293,7 @@ export function DayScreen() {
                   initial={{ opacity: 0, scale: 0.96 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.5, ease }}
+                  data-verdict
                   className="mt-10 rounded-2xl border border-bone/40 bg-ink-2 px-5 py-6"
                 >
                   <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-ash">Phán quyết hôm nay · bất ngờ</p>
@@ -283,6 +312,7 @@ export function DayScreen() {
                   initial={{ opacity: 0, scale: 0.96 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.5, ease }}
+                  data-verdict
                   className="mt-10 overflow-hidden rounded-2xl border border-blood/60 bg-blood/10 px-5 py-6"
                 >
                   <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em] text-blood">
@@ -295,7 +325,7 @@ export function DayScreen() {
                     <p className="mt-3 font-display text-2xl uppercase leading-tight text-blood">Lật bài: {roleName(lynched)}</p>
                   )}
                   <p className="mt-3 text-base leading-relaxed text-bone/75">
-                    Mời {lynched.name} nói lời cuối rồi rời bàn. Từ giờ {lynched.name} im lặng, không được gợi ý cho ai.
+                    {fill(pickScript(VERDICT_SAY, gameNo + nightNumber), lynched.name)}
                   </p>
                   {lynched.roleId === "ELDER" && villagePowersLost && (
                     <p className="mt-3 rounded-xl bg-blood/20 px-3 py-2 text-sm leading-snug text-bone">
@@ -312,7 +342,7 @@ export function DayScreen() {
               )}
 
               {phase === "vote" && (
-                <section className="mt-12">
+                <section ref={voteRef} className="mt-12 scroll-mt-4">
                   <div className="flex items-end justify-between">
                     <span className="font-mono text-[11px] uppercase tracking-[0.25em] text-ash">Bỏ phiếu treo cổ</span>
                     <span className="font-display text-4xl leading-none tabular-nums text-bone">
@@ -432,8 +462,16 @@ export function DayScreen() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 20 }}
-                  className="grid grid-cols-[1fr_1.4fr] gap-3"
+                  className="relative"
                 >
+                  <p
+                    className={`mb-2 text-center font-mono text-[10px] uppercase tracking-[0.2em] ${
+                      timeUpId === accusedId ? "text-blood" : "text-ash"
+                    }`}
+                  >
+                    {timeUpId === accusedId ? "Hết giờ · cả làng giơ tay rồi chạm kết quả" : "Bào chữa xong mới biểu quyết"}
+                  </p>
+                  <div className={`grid grid-cols-[1fr_1.4fr] gap-3 rounded-2xl ${timeUpId === accusedId ? "cta-pulse" : ""}`}>
                   <motion.button
                     type="button"
                     onClick={onSpare}
@@ -457,6 +495,7 @@ export function DayScreen() {
                       {confirmHang ? "Chạm lần nữa" : "Đa số treo"}
                     </span>
                   </motion.button>
+                  </div>
                 </motion.div>
               ) : phase === "vote" && pickedPlayers.length === 1 ? (
                 <motion.button
@@ -467,7 +506,7 @@ export function DayScreen() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 20 }}
                   whileTap={{ scale: 0.97 }}
-                  className="flex h-20 w-full items-center justify-between rounded-2xl bg-bone px-6 text-ink"
+                  className="cta-pulse flex h-20 w-full items-center justify-between rounded-2xl bg-bone px-6 text-ink"
                 >
                   <span className="min-w-0 text-left">
                     <span className="block truncate pt-[0.12em] font-display text-3xl uppercase leading-[1.1]">
@@ -544,6 +583,38 @@ export function DayScreen() {
                   </span>
                   <Dices className="relative size-8 shrink-0" strokeWidth={1.75} />
                 </motion.button>
+              ) : phase === "vote" ? (
+                // Chưa ai bị bầu: việc chính là đếm phiếu và chạm người bị bầu. Đi ngủ không treo phải chạm 2 lần.
+                <motion.div
+                  key="vote-hint"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 20 }}
+                  className="grid grid-cols-[1fr_1.6fr] gap-3"
+                >
+                  <button
+                    type="button"
+                    onClick={onSkipLynch}
+                    className={`flex h-20 flex-col items-center justify-center rounded-2xl border px-2 text-center transition-colors ${
+                      confirmSkip ? "border-blood bg-blood/15 text-bone" : "border-line text-ash active:text-bone"
+                    }`}
+                  >
+                    <span className="font-display text-xl uppercase leading-[1.1]">{confirmSkip ? "Chắc chưa?" : "Không treo"}</span>
+                    <span className="mt-1 font-mono text-[9px] uppercase tracking-[0.15em]">{confirmSkip ? "Chạm lần nữa" : "Đi ngủ luôn"}</span>
+                  </button>
+                  <motion.button
+                    type="button"
+                    onClick={() => voteRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                    whileTap={{ scale: 0.97 }}
+                    className="cta-pulse flex h-20 items-center justify-between rounded-2xl bg-bone px-5 text-ink"
+                  >
+                    <span className="text-left">
+                      <span className="block pt-[0.1em] font-display text-2xl uppercase leading-[1.08]">Bỏ phiếu</span>
+                      <span className="block font-mono text-[9px] uppercase tracking-[0.15em] text-ink/60">Chạm người bị bầu nhiều nhất</span>
+                    </span>
+                    <ArrowDown className="size-6 shrink-0" strokeWidth={2} />
+                  </motion.button>
+                </motion.div>
               ) : (
                 <motion.button
                   key="night"
@@ -554,7 +625,7 @@ export function DayScreen() {
                   exit={{ opacity: 0, y: 20 }}
                   whileTap={{ scale: 0.97 }}
                   className={`flex h-20 w-full items-center justify-between rounded-2xl px-6 transition-colors ${
-                    lynched ? "bg-blood text-bone" : "border border-line bg-ink text-bone"
+                    lynched ? "cta-pulse-blood bg-blood text-bone" : "border border-line bg-ink text-bone"
                   }`}
                 >
                   <span className="text-left">
@@ -683,7 +754,9 @@ function TrialPanel({
   voters,
   idiotMuted,
   onCancel,
+  onTimeUp,
 }: {
+  onTimeUp: () => void;
   accused: Player;
   viaRoulette: boolean;
   /** Số người được bỏ phiếu (đã trừ Thằng ngố lật bài). */
@@ -703,17 +776,20 @@ function TrialPanel({
       setLeft(s);
       if (s === 0) {
         clearInterval(id);
+        onTimeUp();
         try {
           navigator.vibrate?.([300, 120, 300]);
         } catch {}
       }
     }, 250);
     return () => clearInterval(id);
-  }, [deadline]);
+  }, [deadline, onTimeUp]);
 
   const startTimer = () => {
     setLeft(DEFENSE_SECONDS);
     setDeadline(Date.now() + DEFENSE_SECONDS * 1000);
+    // Bấm giờ xong thì đưa phần biểu quyết vào tầm mắt (đồng hồ vẫn thấy ở trên).
+    setTimeout(() => document.querySelector("[data-trial-vote]")?.scrollIntoView({ behavior: "smooth", block: "center" }), 200);
   };
 
   const running = deadline !== null && left > 0;
@@ -786,7 +862,7 @@ function TrialPanel({
         <Timer className={`size-8 ${running ? "animate-pulse text-bone" : deadline === null ? "text-blood" : "text-ash"}`} strokeWidth={1.5} />
       </motion.button>
 
-      <div className="mt-8 rounded-2xl border border-line bg-ink-2 px-4 py-4 text-[15px] leading-snug text-bone/85">
+      <div data-trial-vote className="mt-8 rounded-2xl border border-line bg-ink-2 px-4 py-4 text-[15px] leading-snug text-bone/85">
         <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-ash">Bước 2 · Biểu quyết lần cuối</p>
         <p className="mt-2 flex items-baseline gap-2">
           <span className="font-display text-5xl leading-none tabular-nums text-bone">{need}</span>

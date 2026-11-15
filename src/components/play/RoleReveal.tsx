@@ -1,5 +1,7 @@
 "use client";
 
+import { useGameStore } from "@/store/gameStore";
+import { ROLE_INTRO, pickScript } from "@/constants/scripts";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { EyeOff } from "lucide-react";
@@ -94,6 +96,8 @@ export function RoleReveal({ player, onCancel, onDone }: Props) {
   const { card: cardOf, art } = useArt();
   const card = cardOf(player.roleId);
   const isWolf = role?.team === "WOLVES";
+  const gameNo = useGameStore((s) => s.gameNo ?? 0);
+  const intro = role ? pickScript(ROLE_INTRO[role.id], gameNo) : null;
   const reduceMotion = useReducedMotion();
 
   const [flipped, setFlipped] = useState(false);
@@ -298,7 +302,7 @@ export function RoleReveal({ player, onCancel, onDone }: Props) {
                   </p>
                 )}
                 <p className="mt-4 text-base leading-relaxed text-bone/75">
-                  {role?.description ?? "Không tìm thấy vai. Báo quản trò chia lại."}
+                  {intro ?? "Không tìm thấy vai. Báo quản trò chia lại."}
                 </p>
                 <div className="flex-1" />
                 <motion.button
@@ -307,7 +311,7 @@ export function RoleReveal({ player, onCancel, onDone }: Props) {
                   disabled={!canHide}
                   animate={{ opacity: canHide ? 1 : 0.3 }}
                   whileTap={{ scale: 0.97 }}
-                  className="mb-4 mt-6 flex h-20 w-full items-center justify-between rounded-2xl bg-bone px-6 text-ink"
+                  className={`mb-4 mt-6 flex h-20 w-full items-center justify-between rounded-2xl bg-bone px-6 text-ink ${canHide ? "cta-pulse" : ""}`}
                 >
                   <span className="font-display text-3xl uppercase leading-[1.08]">Đã hiểu, giấu bài</span>
                   <EyeOff className="size-7" strokeWidth={2} />
